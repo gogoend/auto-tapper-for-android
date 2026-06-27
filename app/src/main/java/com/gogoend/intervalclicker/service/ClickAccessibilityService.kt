@@ -45,6 +45,7 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
 
     private val baseFlags =
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
     override fun onServiceConnected() {
