@@ -24,9 +24,9 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 **Purpose**: 依赖与包结构
 
-- [ ] T001 在 `gradle/libs.versions.toml` 添加 kotlinx-coroutines-android 与 androidx.datastore:datastore-preferences 的 version/library 条目
-- [ ] T002 在 `app/build.gradle.kts` 的 dependencies 中引入 T001 的 coroutines 与 datastore 工件
-- [ ] T003 [P] 创建包目录骨架：`service/`、`scheduler/`、`data/`、`permission/`、`ui/config/`、`ui/onboarding/`、`ui/overlay/`（在 `app/src/main/java/com/gogoend/intervalclicker/` 下）
+- [X] T001 在 `gradle/libs.versions.toml` 添加 kotlinx-coroutines-android 与 androidx.datastore:datastore-preferences 的 version/library 条目
+- [X] T002 在 `app/build.gradle.kts` 的 dependencies 中引入 T001 的 coroutines 与 datastore 工件
+- [X] T003 [P] 创建包目录骨架：`service/`、`scheduler/`、`data/`、`permission/`、`ui/config/`、`ui/onboarding/`、`ui/overlay/`（在 `app/src/main/java/com/gogoend/intervalclicker/` 下）
 
 ---
 
@@ -36,13 +36,13 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 **⚠️ CRITICAL**: 本阶段完成前，任何用户故事不可开工
 
-- [ ] T004 [P] 定义 `ClickConfig`（intervalMs/pressDurationMs/fireImmediately/onIncomingCall）、`CallAction` 枚举，及 `validate()`/最小间隔钳制（`minIntervalMs = max(200, pressDurationMs+50)`）在 `data/ClickConfig.kt`（依据 data-model.md / FR-024）
-- [ ] T005 [P] 定义 `ClickTarget`（x/y，默认屏幕中心，不持久化）在 `data/ClickTarget.kt`
-- [ ] T006 实现 `ConfigRepository`（DataStore Preferences 读写 ClickConfig，FR-025）在 `data/ConfigRepository.kt`（依赖 T004）
-- [ ] T007 [P] 实现 `PermissionChecker`（canDrawOverlays、无障碍是否启用、READ_PHONE_STATE、电池优化豁免；提供跳转 Intent）在 `permission/PermissionChecker.kt`
-- [ ] T008 配置 `app/src/main/AndroidManifest.xml`：声明 `SYSTEM_ALERT_WINDOW`、`READ_PHONE_STATE` 权限与 AccessibilityService（`BIND_ACCESSIBILITY_SERVICE`）；新增 `app/src/main/res/xml/accessibility_service_config.xml`（`canPerformGestures=true`）
-- [ ] T009 实现 `ClickAccessibilityService` 骨架 + WindowManager 悬浮窗宿主（`TYPE_APPLICATION_OVERLAY`，ComposeView 配 Lifecycle/SavedState/ViewModelStore owners）在 `service/ClickAccessibilityService.kt`（依赖 T008）
-- [ ] T010 [P] 定义 `SessionState` 枚举与 `ClickSession` 运行态持有者（state/nextFireElapsed/clickCount）在 `scheduler/ClickSession.kt`（依据 data-model.md 状态机）
+- [X] T004 [P] 定义 `ClickConfig`（intervalMs/pressDurationMs/fireImmediately/onIncomingCall）、`CallAction` 枚举，及 `validate()`/最小间隔钳制（`minIntervalMs = max(200, pressDurationMs+50)`）在 `data/ClickConfig.kt`（依据 data-model.md / FR-024）
+- [X] T005 [P] 定义 `ClickTarget`（x/y，默认屏幕中心，不持久化）在 `data/ClickTarget.kt`
+- [X] T006 实现 `ConfigRepository`（DataStore Preferences 读写 ClickConfig，FR-025）在 `data/ConfigRepository.kt`（依赖 T004）
+- [X] T007 [P] 实现 `PermissionChecker`（canDrawOverlays、无障碍是否启用、READ_PHONE_STATE、电池优化豁免；提供跳转 Intent）在 `permission/PermissionChecker.kt`
+- [X] T008 配置 `app/src/main/AndroidManifest.xml`：声明 `SYSTEM_ALERT_WINDOW`、`READ_PHONE_STATE` 权限与 AccessibilityService（`BIND_ACCESSIBILITY_SERVICE`）；新增 `app/src/main/res/xml/accessibility_service_config.xml`（`canPerformGestures=true`）
+- [X] T009 实现 `ClickAccessibilityService` 骨架 + WindowManager 悬浮窗宿主（`TYPE_APPLICATION_OVERLAY`，ComposeView 配 Lifecycle/SavedState/ViewModelStore owners）在 `service/ClickAccessibilityService.kt`（依赖 T008）
+- [X] T010 [P] 定义 `SessionState` 枚举与 `ClickSession` 运行态持有者（state/nextFireElapsed/clickCount）在 `scheduler/ClickSession.kt`（依据 data-model.md 状态机）
 
 **Checkpoint**: 基础就绪——用户故事可开始
 
@@ -56,18 +56,18 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 ### Tests for User Story 1
 
-- [ ] T011 [P] [US1] 单元测试 `ClickScheduler`：fireImmediately、`delayUntilNext`、**无堆积**（错过多周期后基于 now 重设而非补发，FR-013）在 `app/src/test/java/com/gogoend/intervalclicker/ClickSchedulerTest.kt`
+- [X] T011 [P] [US1] 单元测试 `ClickScheduler`：fireImmediately、`delayUntilNext`、**无堆积**（错过多周期后基于 now 重设而非补发，FR-013）在 `app/src/test/java/com/gogoend/intervalclicker/ClickSchedulerTest.kt`
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] 实现 `ClickScheduler`（注入时钟、start/onClickCompleted/delayUntilNext/remainingFraction，自重排）在 `scheduler/ClickScheduler.kt`（contracts/click-scheduler.md）
-- [ ] T013 [US1] 在服务中实现手势派发：`dispatchGesture` 在 target 处 tap（duration=pressDurationMs），派发瞬间临时给控制按钮窗口加 `FLAG_NOT_TOUCHABLE` 后恢复（穿透自身，FR-012）于 `service/ClickAccessibilityService.kt`（依赖 T009）
-- [ ] T014 [US1] 在服务中实现调度循环与 `startClicking/stopClicking`：协程 loop（delay→派发→onClickCompleted），fireImmediately 处理，启动时准星重置为屏幕中心于 `service/ClickAccessibilityService.kt`（依赖 T012, T013）
-- [ ] T015 [P] [US1] 实现准星 Composable（中心十字 + 圆形轮廓，所在窗口 `FLAG_NOT_TOUCHABLE`）在 `ui/overlay/Crosshair.kt`（参照 spec UI 原型）
-- [ ] T016 [US1] 实现圆形"开始"按钮（半透明、覆盖十字、不超轮廓）、基础"停止"按钮与退出按钮 Composable 在 `ui/overlay/OverlayControls.kt`（依赖 T015）
-- [ ] T017 [US1] 接线：悬浮层开始/停止/退出 → `startClicking`/`stopClicking(USER)`/`hideOverlayAndExit`（FR-008/010/011）在 `service/ClickAccessibilityService.kt` 与 `ui/overlay/`（依赖 T014, T016）
-- [ ] T018 [US1] 实现最小配置界面（间隔输入 + 是否立即点击）并在 `MainActivity.kt` 承载、读写 `ConfigRepository` 在 `ui/config/ConfigScreen.kt`（依赖 T006）
-- [ ] T019 [US1] 实现"运行中尝试改配置→弹窗确认是否停止"（是→stop 并可编辑，否→保持运行不改，FR-026）在 `ui/config/ConfigScreen.kt`（依赖 T017, T018）
+- [X] T012 [P] [US1] 实现 `ClickScheduler`（注入时钟、start/onClickCompleted/delayUntilNext/remainingFraction，自重排）在 `scheduler/ClickScheduler.kt`（contracts/click-scheduler.md）
+- [X] T013 [US1] 在服务中实现手势派发：`dispatchGesture` 在 target 处 tap（duration=pressDurationMs），派发瞬间临时给控制按钮窗口加 `FLAG_NOT_TOUCHABLE` 后恢复（穿透自身，FR-012）于 `service/ClickAccessibilityService.kt`（依赖 T009）
+- [X] T014 [US1] 在服务中实现调度循环与 `startClicking/stopClicking`：协程 loop（delay→派发→onClickCompleted），fireImmediately 处理，启动时准星重置为屏幕中心于 `service/ClickAccessibilityService.kt`（依赖 T012, T013）
+- [X] T015 [P] [US1] 实现准星 Composable（中心十字 + 圆形轮廓，所在窗口 `FLAG_NOT_TOUCHABLE`）在 `ui/overlay/Crosshair.kt`（参照 spec UI 原型）
+- [X] T016 [US1] 实现圆形"开始"按钮（半透明、覆盖十字、不超轮廓）、基础"停止"按钮与退出按钮 Composable 在 `ui/overlay/OverlayControls.kt`（依赖 T015）
+- [X] T017 [US1] 接线：悬浮层开始/停止/退出 → `startClicking`/`stopClicking(USER)`/`hideOverlayAndExit`（FR-008/010/011）在 `service/ClickAccessibilityService.kt` 与 `ui/overlay/`（依赖 T014, T016）
+- [X] T018 [US1] 实现最小配置界面（间隔输入 + 是否立即点击）并在 `MainActivity.kt` 承载、读写 `ConfigRepository` 在 `ui/config/ConfigScreen.kt`（依赖 T006）
+- [X] T019 [US1] 实现"运行中尝试改配置→弹窗确认是否停止"（是→stop 并可编辑，否→保持运行不改，FR-026）在 `ui/config/ConfigScreen.kt`（依赖 T017, T018）
 
 **Checkpoint**: US1 可独立运行——MVP 达成
 
@@ -81,8 +81,8 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 ### Implementation for User Story 5
 
-- [ ] T020 [US5] 实现首启权限门禁：检测悬浮窗+无障碍（PermissionChecker），缺失则展示引导并跳转系统设置、禁用"开始"入口直至授予（FR-022）在 `ui/onboarding/PermissionGateScreen.kt` 与 `MainActivity.kt`（依赖 T007）
-- [ ] T021 [US5] 实现可选后台/省电豁免提示：检测未豁免时弹窗说明后果并提供跳转本应用系统设置入口，可忽略不阻断核心功能（FR-023）在 `ui/onboarding/BackgroundHintDialog.kt`（依赖 T007）
+- [X] T020 [US5] 实现首启权限门禁：检测悬浮窗+无障碍（PermissionChecker），缺失则展示引导并跳转系统设置、禁用"开始"入口直至授予（FR-022）在 `ui/onboarding/PermissionGateScreen.kt` 与 `MainActivity.kt`（依赖 T007）
+- [X] T021 [US5] 实现可选后台/省电豁免提示：检测未豁免时弹窗说明后果并提供跳转本应用系统设置入口，可忽略不阻断核心功能（FR-023）在 `ui/onboarding/BackgroundHintDialog.kt`（依赖 T007）
 
 **Checkpoint**: 首启引导完整；权限就绪即可使用 US1
 
@@ -96,12 +96,12 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 ### Tests for User Story 2
 
-- [ ] T022 [P] [US2] 单元测试 `arrangeControls`：四边/四角输入下各控件包围盒落在屏幕可见区内（FR-014/SC-004）在 `app/src/test/java/com/gogoend/intervalclicker/OverlayLayoutTest.kt`
+- [X] T022 [P] [US2] 单元测试 `arrangeControls`：四边/四角输入下各控件包围盒落在屏幕可见区内（FR-014/SC-004）在 `app/src/test/java/com/gogoend/intervalclicker/OverlayLayoutTest.kt`
 
 ### Implementation for User Story 2
 
-- [ ] T023 [P] [US2] 实现纯布局函数 `arrangeControls(center, screenSize, insets): ControlLayout`（边缘自适应）在 `ui/overlay/OverlayLayout.kt`（contracts/overlay-ui.md）
-- [ ] T024 [US2] 实现拖拽手柄 Composable，拖动更新整个悬浮层位置并实时 `updateTarget(x,y)`（FR-006）在 `ui/overlay/DragHandle.kt` 与 `service/ClickAccessibilityService.kt`（依赖 T009, T017）
+- [X] T023 [P] [US2] 实现纯布局函数 `arrangeControls(center, screenSize, insets): ControlLayout`（边缘自适应）在 `ui/overlay/OverlayLayout.kt`（contracts/overlay-ui.md）
+- [X] T024 [US2] 实现拖拽手柄 Composable，拖动更新整个悬浮层位置并实时 `updateTarget(x,y)`（FR-006）在 `ui/overlay/DragHandle.kt` 与 `service/ClickAccessibilityService.kt`（依赖 T009, T017）
 - [ ] T025 [US2] 在悬浮层布局中应用 `arrangeControls`（拖到边缘重排控件）在 `ui/overlay/OverlayControls.kt`（依赖 T023, T024）
 
 **Checkpoint**: US1 + US2 各自可独立工作
@@ -133,13 +133,13 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 ### Tests for User Story 3
 
-- [ ] T030 [P] [US3] 单元测试 `CountdownModel.remainingFraction`：满间隔≈1.0、临近≈0.0、钳制 [0,1]（SC-005）在 `app/src/test/java/com/gogoend/intervalclicker/CountdownModelTest.kt`
+- [X] T030 [P] [US3] 单元测试 `CountdownModel.remainingFraction`：满间隔≈1.0、临近≈0.0、钳制 [0,1]（SC-005）在 `app/src/test/java/com/gogoend/intervalclicker/CountdownModelTest.kt`
 
 ### Implementation for User Story 3
 
-- [ ] T031 [P] [US3] 实现 `CountdownModel.remainingFraction(nextFireElapsed, intervalMs)` 在 `scheduler/CountdownModel.kt`
-- [ ] T032 [US3] 将"停止"按钮升级为扇形渲染（Compose `Canvas.drawArc`，`withFrameNanos` 帧驱动，半径不超轮廓、半透明覆盖十字，FR-009）在 `ui/overlay/OverlayControls.kt`（依赖 T031, T016）
-- [ ] T033 [US3] 配置界面新增"按下时长"并在 UI 强制最小间隔（间隔 ≥ minIntervalMs，FR-024）在 `ui/config/ConfigScreen.kt`（依赖 T018）
+- [X] T031 [P] [US3] 实现 `CountdownModel.remainingFraction(nextFireElapsed, intervalMs)` 在 `scheduler/CountdownModel.kt`
+- [X] T032 [US3] 将"停止"按钮升级为扇形渲染（Compose `Canvas.drawArc`，`withFrameNanos` 帧驱动，半径不超轮廓、半透明覆盖十字，FR-009）在 `ui/overlay/OverlayControls.kt`（依赖 T031, T016）
+- [X] T033 [US3] 配置界面新增"按下时长"并在 UI 强制最小间隔（间隔 ≥ minIntervalMs，FR-024）在 `ui/config/ConfigScreen.kt`（依赖 T018）
 
 **Checkpoint**: 全部用户故事独立可用
 
@@ -149,7 +149,7 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 **Purpose**: 跨故事完善
 
-- [ ] T034 [P] 填写无障碍服务用途说明字符串、应用图标与文案于 `app/src/main/res/values/strings.xml` 及相关资源
+- [X] T034 [P] 填写无障碍服务用途说明字符串、应用图标与文案于 `app/src/main/res/values/strings.xml` 及相关资源
 - [ ] T035 [P] 补充边缘 insets 单测（状态栏/导航栏/刘海区域下 `arrangeControls` 行为）在 `app/src/test/java/com/gogoend/intervalclicker/OverlayLayoutTest.kt`
 - [ ] T036 间隔精度验证：设 5s 跑 10 分钟记录时间戳，核对 ±5%（SC-001）并据此校准调度补偿，记录于 quickstart 验收
 - [ ] T037 代码清理与重构（统一 service 与 UI 的状态流、移除样板）跨 `service/`、`ui/`
