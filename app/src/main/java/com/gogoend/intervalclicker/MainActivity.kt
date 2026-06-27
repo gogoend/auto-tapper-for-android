@@ -106,10 +106,8 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
         ) {
             Text("自动连点器", style = MaterialTheme.typography.headlineSmall)
 
-            if (!perms.canOverlay || !perms.accessibility) {
+            if (!perms.accessibility) {
                 PermissionGate(
-                    perms = perms,
-                    onOpenOverlay = { context.startActivity(PermissionChecker.overlaySettingsIntent(context)) },
                     onOpenAccessibility = { context.startActivity(PermissionChecker.accessibilitySettingsIntent()) },
                 )
             } else {
@@ -139,23 +137,17 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
 
 @Composable
 private fun PermissionGate(
-    perms: PermSnapshot,
-    onOpenOverlay: () -> Unit,
     onOpenAccessibility: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("需要授权后才能使用", style = MaterialTheme.typography.titleMedium)
-            Text("以下为必需权限，未授予则无法开始定时点击：")
+            Text("必须开启本应用的无障碍服务，才能执行自动点击：")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(if (perms.canOverlay) "✓ 悬浮窗权限" else "✗ 悬浮窗权限")
-                if (!perms.canOverlay) Button(onClick = onOpenOverlay) { Text("去开启") }
+                Text("✗ 无障碍服务")
+                Button(onClick = onOpenAccessibility) { Text("去开启") }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(if (perms.accessibility) "✓ 无障碍服务" else "✗ 无障碍服务")
-                if (!perms.accessibility) Button(onClick = onOpenAccessibility) { Text("去开启") }
-            }
-            Text("授权后返回本页面即可继续。", style = MaterialTheme.typography.bodySmall)
+            Text("开启后返回本页面即可继续。悬浮层由无障碍服务绘制，无需单独的悬浮窗权限。", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

@@ -36,9 +36,12 @@ object PermissionChecker {
         return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
 
-    /** 必需权限是否齐备——为 false 时核心功能不可用（FR-022）。 */
-    fun isCoreUsable(context: Context): Boolean =
-        canDrawOverlay(context) && isAccessibilityEnabled(context)
+    /**
+     * 必需权限是否齐备——为 false 时核心功能不可用（FR-022）。
+     * 悬浮层使用 TYPE_ACCESSIBILITY_OVERLAY（由无障碍服务添加的可信系统窗口），
+     * 不需要 SYSTEM_ALERT_WINDOW，因此核心可用性仅取决于无障碍服务是否启用。
+     */
+    fun isCoreUsable(context: Context): Boolean = isAccessibilityEnabled(context)
 
     fun overlaySettingsIntent(context: Context): Intent = Intent(
         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,

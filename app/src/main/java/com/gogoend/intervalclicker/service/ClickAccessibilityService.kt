@@ -96,13 +96,17 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         val params = WindowManager.LayoutParams(
             sizePx,
             sizePx,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             baseFlags,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = (target.x - sizePx / 2f).toInt()
             y = (target.y - sizePx / 2f).toInt()
+            // 关键：窗口不透明度需 ≤ maximumObscuringOpacityForTouch（默认 0.8），
+            // 否则 Android 12+（在 Android 16 上默认强制）会把"被本悬浮窗遮挡"的注入点击
+            // 当作 untrusted touch 丢弃，导致目标 App（如相机）收不到点击。
+            alpha = OVERLAY_ALPHA
         }
         windowManager.addView(view, params)
         overlayView = view
@@ -236,6 +240,9 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
 
     companion object {
         private const val FRAME_MS = 16L
+
+        /** 悬浮窗不透明度，≤ 系统 maximumObscuringOpacityForTouch（默认 0.8），避免注入点击被当作被遮挡而丢弃。 */
+        private const val OVERLAY_ALPHA = 0.8f
 
         @Volatile
         var instance: ClickAccessibilityService? = null
