@@ -228,8 +228,9 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         // 注入手势仍被目标判为 obscured 而不下发。故派发期间同步移除悬浮窗，结束后再恢复。
         detachOverlayForDispatch()
         try {
-            // 让窗口移除真正生效一帧，确保派发时落点上方无任何本应用窗口
-            delay(16)
+            // 让窗口移除真正生效（含 obscured 状态重算）。一帧（16ms）在部分设备/模拟器上不够，
+            // 取较保守的沉降时间，确保派发时落点上方确实无任何本应用窗口。
+            delay(OVERLAY_SETTLE_MS)
             // 注意：path 必须有非零长度，否则 Android 16+ 可能不把它识别为有效点击
             val path = Path().apply {
                 moveTo(t.x, t.y)
@@ -314,6 +315,7 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
 
     companion object {
         private const val FRAME_MS = 16L
+        private const val OVERLAY_SETTLE_MS = 90L
 
         /** 悬浮窗不透明度，≤ 系统 maximumObscuringOpacityForTouch（默认 0.8），避免注入点击被当作被遮挡而丢弃。 */
         private const val OVERLAY_ALPHA = 0.8f
