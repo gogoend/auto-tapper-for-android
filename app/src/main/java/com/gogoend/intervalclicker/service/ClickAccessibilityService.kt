@@ -182,7 +182,10 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         logger?.startSession("DIAGNOSTIC no-overlay; will tap center ($cx, $cy) after 3s")
         scope.launch {
             delay(3000)
-            val path = Path().apply { moveTo(cx, cy) }
+            val path = Path().apply {
+                moveTo(cx, cy)
+                lineTo(cx + 1f, cy + 1f)
+            }
             val stroke = GestureDescription.StrokeDescription(path, 0L, 80L)
             val gesture = GestureDescription.Builder().addStroke(stroke).build()
             val dispatched = dispatchGesture(
@@ -227,7 +230,11 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         try {
             // 让窗口移除真正生效一帧，确保派发时落点上方无任何本应用窗口
             delay(16)
-            val path = Path().apply { moveTo(t.x, t.y) }
+            // 注意：path 必须有非零长度，否则 Android 16+ 可能不把它识别为有效点击
+            val path = Path().apply {
+                moveTo(t.x, t.y)
+                lineTo(t.x + 1f, t.y + 1f)
+            }
             val stroke = GestureDescription.StrokeDescription(
                 path, 0L, currentConfig.pressDurationMs.coerceAtLeast(1L),
             )
