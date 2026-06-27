@@ -10,6 +10,7 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import com.gogoend.intervalclicker.data.ClickConfig
 import com.gogoend.intervalclicker.data.ClickTarget
+import com.gogoend.intervalclicker.logging.ClickLogger
 import com.gogoend.intervalclicker.scheduler.ClickScheduler
 import com.gogoend.intervalclicker.scheduler.StopReason
 import com.gogoend.intervalclicker.ui.overlay.OverlayView
@@ -39,6 +40,8 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     private val scheduler = ClickScheduler { SystemClock.elapsedRealtime() }
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var clickJob: Job? = null
+    private var clickCount = 0
+    private var logger: ClickLogger? = null
 
     private val baseFlags =
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -47,6 +50,7 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     override fun onServiceConnected() {
         super.onServiceConnected()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        logger = ClickLogger(applicationContext)
         instance = this
         serviceReady.value = true
     }
@@ -109,9 +113,14 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         if (isRunning.value) return
         isRunning.value = true
         view.setRunning(true)
+        clickCount = 0
 
         clickJob = scope.launch {
             val interval = currentConfig.intervalMs
+            logger?.logEvent(
+                "START interval=${interval}ms press=${currentConfig.pressDurationMs}ms " +
+                    "fireImmediately=${currentConfig.fireImmediately} target=(${target.x.toInt()}, ${target.y.toInt()})",
+            )
             val plan = scheduler.start(interval, currentConfig.fireImmediately)
             var next = plan.nextFireElapsed
             if (plan.fireNow) {
@@ -132,6 +141,9 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     }
 
     fun stopClicking(reason: StopReason) {
+        if (isRunning.value) {
+            logger?.logEvent("STOP reason=$reason totalClicks=$clickCount")
+        }
         clickJob?.cancel()
         clickJob = null
         isRunning.value = false
@@ -157,6 +169,8 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
 
     private fun performTap() {
         val t = target
+        clickCount++
+        logger?.logClick(t.x, t.y, clickCount)
         val path = Path().apply { moveTo(t.x, t.y) }
         val stroke = GestureDescription.StrokeDescription(
             path, 0L, currentConfig.pressDurationMs.coerceAtLeast(1L),

@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.gogoend.intervalclicker.data.CallAction
 import com.gogoend.intervalclicker.data.ClickConfig
 import com.gogoend.intervalclicker.data.ConfigRepository
+import com.gogoend.intervalclicker.logging.ClickLogger
 import com.gogoend.intervalclicker.permission.PermissionChecker
 import com.gogoend.intervalclicker.scheduler.StopReason
 import com.gogoend.intervalclicker.service.ClickAccessibilityService
@@ -85,6 +86,10 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
     val scope = rememberCoroutineScope()
     val config by repo.configFlow.collectAsState(initial = ClickConfig())
     val isRunning by ClickAccessibilityService.isRunning.collectAsState()
+    val logPath = remember {
+        (context.getExternalFilesDir(null) ?: context.filesDir)
+            .resolve(ClickLogger.FILE_NAME).absolutePath
+    }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
         Column(
@@ -108,6 +113,7 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
                     config = config,
                     isRunning = isRunning,
                     batteryOk = perms.battery,
+                    logPath = logPath,
                     onConfigChange = { updated ->
                         scope.launch { repo.save(updated) }
                         ClickAccessibilityService.instance?.updateConfig(updated)
@@ -156,6 +162,7 @@ private fun ConfigContent(
     config: ClickConfig,
     isRunning: Boolean,
     batteryOk: Boolean,
+    logPath: String,
     onConfigChange: (ClickConfig) -> Unit,
     onShowOverlay: () -> Unit,
     onStopForEdit: () -> Unit,
@@ -220,6 +227,7 @@ private fun ConfigContent(
         "在悬浮窗上点击中心圆形按钮开始/停止；拖动上方手柄移动落点；点击 X 退出。",
         style = MaterialTheme.typography.bodySmall,
     )
+    Text("点击日志：$logPath", style = MaterialTheme.typography.bodySmall)
 
     if (!batteryOk) {
         Card(Modifier.fillMaxWidth()) {
