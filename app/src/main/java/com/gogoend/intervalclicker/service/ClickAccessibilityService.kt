@@ -13,7 +13,8 @@ import com.gogoend.intervalclicker.data.ClickTarget
 import com.gogoend.intervalclicker.logging.ClickLogger
 import com.gogoend.intervalclicker.scheduler.ClickScheduler
 import com.gogoend.intervalclicker.scheduler.StopReason
-import com.gogoend.intervalclicker.ui.overlay.OverlayView
+import com.gogoend.intervalclicker.ui.overlay.ControlBarView
+import com.gogoend.intervalclicker.ui.overlay.CrosshairView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,16 +26,33 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
+import kotlin.math.max
 
 /**
  * 核心运行时：承载悬浮窗、手势派发与无堆积调度循环。见 contracts/accessibility-service.md。
+ *
+ * 悬浮层分为两个独立窗口：
+ *  - 准星视觉层（CrosshairView）：永久 NOT_TOUCHABLE，位于点击落点之上；仅在每次派发点击的瞬间
+ *    被临时移除，避免 Android 16+ 把"被遮挡"的注入点击丢弃。
+ *  - 控制条（ControlBarView）：可触摸，放在偏离落点的位置，始终存在、不参与移除（故不闪烁），
+ *    也不会被注入点击误触。
  */
-class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
+class ClickAccessibilityService : AccessibilityService(), ControlBarView.Listener {
 
     private lateinit var windowManager: WindowManager
-    private var overlayView: OverlayView? = null
-    private var layoutParams: WindowManager.LayoutParams? = null
-    private var sizePx: Int = 0
+
+    private var crosshairView: CrosshairView? = null
+    private var crosshairParams: WindowManager.LayoutParams? = null
+    private var crosshairAttached = false
+
+    private var controlView: ControlBarView? = null
+    private var controlParams: WindowManager.LayoutParams? = null
+
+    private var csSize = 0
+    private var controlW = 0
+    private var controlH = 0
+    private var screenW = 0
+    private var screenH = 0
 
     private var currentConfig: ClickConfig = ClickConfig()
     private var target: ClickTarget = ClickTarget(0f, 0f)
@@ -44,7 +62,6 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     private var clickJob: Job? = null
     private var clickCount = 0
     private var logger: ClickLogger? = null
-    private var overlayAttached = false
 
     private val baseFlags =
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -90,52 +107,95 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     fun showOverlay(config: ClickConfig) {
         currentConfig = config.normalized()
         logger?.enabled = currentConfig.loggingEnabled
-        if (overlayView != null) return
+        if (crosshairView != null) return
 
-        val metrics = resources.displayMetrics
-        sizePx = (minOf(metrics.widthPixels, metrics.heightPixels) * 0.55f).toInt()
-        target = ClickTarget.center(metrics.widthPixels, metrics.heightPixels)
+        val m = resources.displayMetrics
+        screenW = m.widthPixels
+        screenH = m.heightPixels
+        val density = m.density
+        csSize = (minOf(screenW, screenH) * 0.28f).toInt()
+        val buttonR = 26f * density
+        val gap = 12f * density
+        controlW = (gap * 4 + buttonR * 6).toInt()
+        controlH = (buttonR * 2 + gap * 2).toInt()
+        target = ClickTarget.center(screenW, screenH)
 
-        val view = OverlayView(this, sizePx, this)
-        val params = WindowManager.LayoutParams(
-            sizePx,
-            sizePx,
+        // 准星视觉层（不可触摸）
+        val cs = CrosshairView(this, csSize)
+        val csParams = WindowManager.LayoutParams(
+            csSize,
+            csSize,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            alpha = OVERLAY_ALPHA
+        }
+        crosshairView = cs
+        crosshairParams = csParams
+        positionCrosshair()
+        windowManager.addView(cs, csParams)
+        crosshairAttached = true
+
+        // 控制条（可触摸，偏离落点）
+        val cv = ControlBarView(this, buttonR, gap, this)
+        val cvParams = WindowManager.LayoutParams(
+            controlW,
+            controlH,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             baseFlags,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = (target.x - sizePx / 2f).toInt()
-            y = (target.y - sizePx / 2f).toInt()
-            // 关键：窗口不透明度需 ≤ maximumObscuringOpacityForTouch（默认 0.8），
-            // 否则 Android 12+（在 Android 16 上默认强制）会把"被本悬浮窗遮挡"的注入点击
-            // 当作 untrusted touch 丢弃，导致目标 App（如相机）收不到点击。
-            alpha = OVERLAY_ALPHA
         }
-        windowManager.addView(view, params)
-        overlayView = view
-        layoutParams = params
-        overlayAttached = true
+        controlView = cv
+        controlParams = cvParams
+        positionControl()
+        windowManager.addView(cv, cvParams)
+
         overlayShown.value = true
     }
 
+    /** 准星窗口位置：中心对准 target。 */
+    private fun positionCrosshair() {
+        val params = crosshairParams ?: return
+        params.x = (target.x - csSize / 2f).toInt()
+        params.y = (target.y - csSize / 2f).toInt()
+        if (crosshairAttached) {
+            crosshairView?.let { runCatching { windowManager.updateViewLayout(it, params) } }
+        }
+    }
+
+    /** 控制条位置：默认放在准星下方一段距离；下方放不下则放上方；并夹取到屏幕内。不覆盖 target。 */
+    private fun positionControl() {
+        val params = controlParams ?: return
+        val belowY = (target.y + csSize / 2f + csSize * 0.12f).toInt()
+        val aboveY = (target.y - csSize / 2f - csSize * 0.12f - controlH).toInt()
+        var top = if (belowY + controlH <= screenH) belowY else aboveY
+        var left = (target.x - controlW / 2f).toInt()
+        left = left.coerceIn(0, max(0, screenW - controlW))
+        top = top.coerceIn(0, max(0, screenH - controlH))
+        params.x = left
+        params.y = top
+        controlView?.let { runCatching { windowManager.updateViewLayout(it, params) } }
+    }
+
     fun startClicking() {
-        val view = overlayView ?: return
+        val cs = crosshairView ?: return
         if (isRunning.value) return
         isRunning.value = true
-        view.setRunning(true)
+        cs.setRunning(true)
+        controlView?.setRunning(true)
         clickCount = 0
 
         logger?.enabled = currentConfig.loggingEnabled
         clickJob = scope.launch {
             val interval = currentConfig.intervalMs
-            val m = resources.displayMetrics
-            val lp = layoutParams
             logger?.startSession(
                 "interval=${interval}ms press=${currentConfig.pressDurationMs}ms " +
                     "fireImmediately=${currentConfig.fireImmediately} target=(${target.x.toInt()}, ${target.y.toInt()}) " +
-                    "display=${m.widthPixels}x${m.heightPixels} overlay=ACCESSIBILITY size=$sizePx " +
-                    "rect=(${lp?.x},${lp?.y},${lp?.width},${lp?.height})",
+                    "display=${screenW}x${screenH} overlay=ACCESSIBILITY(2win) csSize=$csSize",
             )
             val plan = scheduler.start(interval, currentConfig.fireImmediately)
             var next = plan.nextFireElapsed
@@ -149,7 +209,7 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
                     performTap()
                     next = scheduler.onClickCompleted(interval)
                 } else {
-                    view.setFraction(scheduler.remainingFraction(next, interval))
+                    cs.setFraction(scheduler.remainingFraction(next, interval))
                     delay(FRAME_MS)
                 }
             }
@@ -163,9 +223,9 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         clickJob?.cancel()
         clickJob = null
         isRunning.value = false
-        overlayView?.setRunning(false)
-        overlayView?.setFraction(0f)
-        setOverlayTouchable(true)
+        crosshairView?.setRunning(false)
+        crosshairView?.setFraction(0f)
+        controlView?.setRunning(false)
     }
 
     /**
@@ -208,12 +268,15 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     }
 
     private fun removeOverlay() {
-        if (overlayAttached) {
-            overlayView?.let { runCatching { windowManager.removeViewImmediate(it) } }
+        if (crosshairAttached) {
+            crosshairView?.let { runCatching { windowManager.removeViewImmediate(it) } }
         }
-        overlayAttached = false
-        overlayView = null
-        layoutParams = null
+        crosshairAttached = false
+        crosshairView = null
+        crosshairParams = null
+        controlView?.let { runCatching { windowManager.removeViewImmediate(it) } }
+        controlView = null
+        controlParams = null
     }
 
     // ---- 手势派发（FR-008 / FR-012）----
@@ -224,14 +287,13 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         val n = clickCount
         logger?.logClick(t.x, t.y, n)
 
-        // Android 16+ 会丢弃"被遮挡"的注入点击：可见悬浮窗（哪怕 NOT_TOUCHABLE）盖在落点上方，
-        // 注入手势仍被目标判为 obscured 而不下发。故派发期间同步移除悬浮窗，结束后再恢复。
-        detachOverlayForDispatch()
+        // 仅移除准星视觉层（它盖在落点上方会导致注入点击被判为 obscured 而丢弃）；
+        // 控制条偏离落点、不参与移除，因此不会闪烁。
+        detachCrosshairForDispatch()
         try {
-            // 让窗口移除真正生效（含 obscured 状态重算）。一帧（16ms）在部分设备/模拟器上不够，
-            // 取较保守的沉降时间，确保派发时落点上方确实无任何本应用窗口。
+            // 让窗口移除真正生效（含 obscured 状态重算）后再派发。
             delay(OVERLAY_SETTLE_MS)
-            // 注意：path 必须有非零长度，否则 Android 16+ 可能不把它识别为有效点击
+            // path 必须有非零长度，否则 Android 16+ 可能不把它识别为有效点击。
             val path = Path().apply {
                 moveTo(t.x, t.y)
                 lineTo(t.x + 1f, t.y + 1f)
@@ -245,7 +307,6 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
                     gesture,
                     object : GestureResultCallback() {
                         override fun onCompleted(d: GestureDescription?) {
-                            logger?.logEvent("  gesture #$n onCompleted")
                             if (cont.isActive) cont.resume(Unit)
                         }
                         override fun onCancelled(d: GestureDescription?) {
@@ -255,69 +316,53 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
                     },
                     null,
                 )
-                logger?.logEvent("  gesture #$n dispatchGesture returned=$dispatched")
-                if (!dispatched && cont.isActive) cont.resume(Unit)
+                if (!dispatched) {
+                    logger?.logEvent("  gesture #$n dispatchGesture returned=false")
+                    if (cont.isActive) cont.resume(Unit)
+                }
             }
         } finally {
-            reattachOverlayAfterDispatch()
+            reattachCrosshairAfterDispatch()
         }
     }
 
-    /** 派发前同步移除悬浮窗（保留 view 与 params 以便恢复）。 */
-    private fun detachOverlayForDispatch() {
-        val view = overlayView ?: return
-        if (!overlayAttached) return
+    private fun detachCrosshairForDispatch() {
+        val view = crosshairView ?: return
+        if (!crosshairAttached) return
         runCatching { windowManager.removeViewImmediate(view) }
-        overlayAttached = false
+        crosshairAttached = false
     }
 
-    /** 派发结束后恢复悬浮窗。 */
-    private fun reattachOverlayAfterDispatch() {
-        val view = overlayView ?: return
-        val params = layoutParams ?: return
-        if (overlayAttached) return
+    private fun reattachCrosshairAfterDispatch() {
+        val view = crosshairView ?: return
+        val params = crosshairParams ?: return
+        if (crosshairAttached) return
         runCatching { windowManager.addView(view, params) }
-        overlayAttached = true
+        crosshairAttached = true
     }
 
-    private fun setOverlayTouchable(touchable: Boolean) {
-        val view = overlayView ?: return
-        val params = layoutParams ?: return
-        params.flags = if (touchable) {
-            baseFlags
-        } else {
-            baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-        }
-        runCatching { windowManager.updateViewLayout(view, params) }
-    }
-
-    // ---- OverlayView.Listener ----
+    // ---- ControlBarView.Listener ----
 
     override fun onStartStopTap() {
-        // 若这条出现在某次 CLICK 之后、而你并未触屏，说明注入的点击命中了悬浮窗自身（穿透失败）
-        logger?.logEvent("overlay button TAPPED (running=${isRunning.value})")
         if (isRunning.value) stopClicking(StopReason.USER) else startClicking()
     }
 
-    override fun onExitTap() {
-        logger?.logEvent("overlay EXIT tapped")
-        hideOverlayAndExit()
-    }
+    override fun onExitTap() = hideOverlayAndExit()
 
     override fun onDrag(dxScreen: Float, dyScreen: Float) {
-        val view = overlayView ?: return
-        val params = layoutParams ?: return
-        params.x += dxScreen.toInt()
-        params.y += dyScreen.toInt()
-        runCatching { windowManager.updateViewLayout(view, params) }
-        target = ClickTarget(params.x + sizePx / 2f, params.y + sizePx / 2f)
+        target = ClickTarget(
+            (target.x + dxScreen).coerceIn(0f, screenW.toFloat()),
+            (target.y + dyScreen).coerceIn(0f, screenH.toFloat()),
+        )
+        positionCrosshair()
+        positionControl()
     }
 
     companion object {
         private const val FRAME_MS = 16L
         private const val OVERLAY_SETTLE_MS = 90L
 
-        /** 悬浮窗不透明度，≤ 系统 maximumObscuringOpacityForTouch（默认 0.8），避免注入点击被当作被遮挡而丢弃。 */
+        /** 准星窗口不透明度，≤ 系统 maximumObscuringOpacityForTouch（默认 0.8）。 */
         private const val OVERLAY_ALPHA = 0.8f
 
         @Volatile
