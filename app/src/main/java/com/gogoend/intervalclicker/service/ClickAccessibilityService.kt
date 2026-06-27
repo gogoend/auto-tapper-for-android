@@ -173,7 +173,8 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     private fun performTap() {
         val t = target
         clickCount++
-        logger?.logClick(t.x, t.y, clickCount)
+        val n = clickCount
+        logger?.logClick(t.x, t.y, n)
         val path = Path().apply { moveTo(t.x, t.y) }
         val stroke = GestureDescription.StrokeDescription(
             path, 0L, currentConfig.pressDurationMs.coerceAtLeast(1L),
@@ -185,11 +186,18 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         val dispatched = dispatchGesture(
             gesture,
             object : GestureResultCallback() {
-                override fun onCompleted(d: GestureDescription?) { setOverlayTouchable(true) }
-                override fun onCancelled(d: GestureDescription?) { setOverlayTouchable(true) }
+                override fun onCompleted(d: GestureDescription?) {
+                    logger?.logEvent("  gesture #$n onCompleted")
+                    setOverlayTouchable(true)
+                }
+                override fun onCancelled(d: GestureDescription?) {
+                    logger?.logEvent("  gesture #$n onCancelled")
+                    setOverlayTouchable(true)
+                }
             },
             null,
         )
+        logger?.logEvent("  gesture #$n dispatchGesture returned=$dispatched")
         if (!dispatched) setOverlayTouchable(true)
     }
 
@@ -207,10 +215,15 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     // ---- OverlayView.Listener ----
 
     override fun onStartStopTap() {
+        // 若这条出现在某次 CLICK 之后、而你并未触屏，说明注入的点击命中了悬浮窗自身（穿透失败）
+        logger?.logEvent("overlay button TAPPED (running=${isRunning.value})")
         if (isRunning.value) stopClicking(StopReason.USER) else startClicking()
     }
 
-    override fun onExitTap() = hideOverlayAndExit()
+    override fun onExitTap() {
+        logger?.logEvent("overlay EXIT tapped")
+        hideOverlayAndExit()
+    }
 
     override fun onDrag(dxScreen: Float, dyScreen: Float) {
         val view = overlayView ?: return
