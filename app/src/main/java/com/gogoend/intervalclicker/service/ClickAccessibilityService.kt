@@ -124,9 +124,13 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         logger?.enabled = currentConfig.loggingEnabled
         clickJob = scope.launch {
             val interval = currentConfig.intervalMs
+            val m = resources.displayMetrics
+            val lp = layoutParams
             logger?.startSession(
                 "interval=${interval}ms press=${currentConfig.pressDurationMs}ms " +
-                    "fireImmediately=${currentConfig.fireImmediately} target=(${target.x.toInt()}, ${target.y.toInt()})",
+                    "fireImmediately=${currentConfig.fireImmediately} target=(${target.x.toInt()}, ${target.y.toInt()}) " +
+                    "display=${m.widthPixels}x${m.heightPixels} overlay=ACCESSIBILITY size=$sizePx " +
+                    "rect=(${lp?.x},${lp?.y},${lp?.width},${lp?.height})",
             )
             val plan = scheduler.start(interval, currentConfig.fireImmediately)
             var next = plan.nextFireElapsed
