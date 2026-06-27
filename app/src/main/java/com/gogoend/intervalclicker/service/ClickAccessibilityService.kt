@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /**
  * 核心运行时：承载悬浮窗、手势派发与无堆积调度循环。见 contracts/accessibility-service.md。
@@ -42,6 +44,7 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     private var clickJob: Job? = null
     private var clickCount = 0
     private var logger: ClickLogger? = null
+    private var overlayAttached = false
 
     private val baseFlags =
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -112,6 +115,7 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         windowManager.addView(view, params)
         overlayView = view
         layoutParams = params
+        overlayAttached = true
         overlayShown.value = true
     }
 
@@ -201,42 +205,71 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
     }
 
     private fun removeOverlay() {
-        overlayView?.let { runCatching { windowManager.removeView(it) } }
+        if (overlayAttached) {
+            overlayView?.let { runCatching { windowManager.removeViewImmediate(it) } }
+        }
+        overlayAttached = false
         overlayView = null
         layoutParams = null
     }
 
     // ---- 手势派发（FR-008 / FR-012）----
 
-    private fun performTap() {
+    private suspend fun performTap() {
         val t = target
         clickCount++
         val n = clickCount
         logger?.logClick(t.x, t.y, n)
-        val path = Path().apply { moveTo(t.x, t.y) }
-        val stroke = GestureDescription.StrokeDescription(
-            path, 0L, currentConfig.pressDurationMs.coerceAtLeast(1L),
-        )
-        val gesture = GestureDescription.Builder().addStroke(stroke).build()
 
-        // 派发瞬间使悬浮窗透传，避免点到控制按钮自身
-        setOverlayTouchable(false)
-        val dispatched = dispatchGesture(
-            gesture,
-            object : GestureResultCallback() {
-                override fun onCompleted(d: GestureDescription?) {
-                    logger?.logEvent("  gesture #$n onCompleted")
-                    setOverlayTouchable(true)
-                }
-                override fun onCancelled(d: GestureDescription?) {
-                    logger?.logEvent("  gesture #$n onCancelled")
-                    setOverlayTouchable(true)
-                }
-            },
-            null,
-        )
-        logger?.logEvent("  gesture #$n dispatchGesture returned=$dispatched")
-        if (!dispatched) setOverlayTouchable(true)
+        // Android 16+ 会丢弃"被遮挡"的注入点击：可见悬浮窗（哪怕 NOT_TOUCHABLE）盖在落点上方，
+        // 注入手势仍被目标判为 obscured 而不下发。故派发期间同步移除悬浮窗，结束后再恢复。
+        detachOverlayForDispatch()
+        try {
+            // 让窗口移除真正生效一帧，确保派发时落点上方无任何本应用窗口
+            delay(16)
+            val path = Path().apply { moveTo(t.x, t.y) }
+            val stroke = GestureDescription.StrokeDescription(
+                path, 0L, currentConfig.pressDurationMs.coerceAtLeast(1L),
+            )
+            val gesture = GestureDescription.Builder().addStroke(stroke).build()
+            suspendCancellableCoroutine { cont ->
+                val dispatched = dispatchGesture(
+                    gesture,
+                    object : GestureResultCallback() {
+                        override fun onCompleted(d: GestureDescription?) {
+                            logger?.logEvent("  gesture #$n onCompleted")
+                            if (cont.isActive) cont.resume(Unit)
+                        }
+                        override fun onCancelled(d: GestureDescription?) {
+                            logger?.logEvent("  gesture #$n onCancelled")
+                            if (cont.isActive) cont.resume(Unit)
+                        }
+                    },
+                    null,
+                )
+                logger?.logEvent("  gesture #$n dispatchGesture returned=$dispatched")
+                if (!dispatched && cont.isActive) cont.resume(Unit)
+            }
+        } finally {
+            reattachOverlayAfterDispatch()
+        }
+    }
+
+    /** 派发前同步移除悬浮窗（保留 view 与 params 以便恢复）。 */
+    private fun detachOverlayForDispatch() {
+        val view = overlayView ?: return
+        if (!overlayAttached) return
+        runCatching { windowManager.removeViewImmediate(view) }
+        overlayAttached = false
+    }
+
+    /** 派发结束后恢复悬浮窗。 */
+    private fun reattachOverlayAfterDispatch() {
+        val view = overlayView ?: return
+        val params = layoutParams ?: return
+        if (overlayAttached) return
+        runCatching { windowManager.addView(view, params) }
+        overlayAttached = true
     }
 
     private fun setOverlayTouchable(touchable: Boolean) {
