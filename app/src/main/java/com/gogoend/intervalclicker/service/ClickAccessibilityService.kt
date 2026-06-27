@@ -37,7 +37,10 @@ import kotlin.math.max
  *  - 控制条（ControlBarView）：可触摸，放在偏离落点的位置，始终存在、不参与移除（故不闪烁），
  *    也不会被注入点击误触。
  */
-class ClickAccessibilityService : AccessibilityService(), ControlBarView.Listener {
+class ClickAccessibilityService :
+    AccessibilityService(),
+    ControlBarView.Listener,
+    CrosshairView.Listener {
 
     private lateinit var windowManager: WindowManager
 
@@ -116,17 +119,18 @@ class ClickAccessibilityService : AccessibilityService(), ControlBarView.Listene
         csSize = (minOf(screenW, screenH) * 0.28f).toInt()
         val buttonR = 26f * density
         val gap = 12f * density
-        controlW = (gap * 4 + buttonR * 6).toInt()
+        // 控制条只有 2 个按钮（拖拽手柄 + 退出）
+        controlW = (gap * 3 + buttonR * 4).toInt()
         controlH = (buttonR * 2 + gap * 2).toInt()
         target = ClickTarget.center(screenW, screenH)
 
-        // 准星视觉层（不可触摸）
-        val cs = CrosshairView(this, csSize)
+        // 准星 + 中心开始/停止按钮（可触摸；仅在派发瞬间临时移除）
+        val cs = CrosshairView(this, csSize, this)
         val csParams = WindowManager.LayoutParams(
             csSize,
             csSize,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            baseFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            baseFlags,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -186,7 +190,6 @@ class ClickAccessibilityService : AccessibilityService(), ControlBarView.Listene
         if (isRunning.value) return
         isRunning.value = true
         cs.setRunning(true)
-        controlView?.setRunning(true)
         clickCount = 0
 
         logger?.enabled = currentConfig.loggingEnabled
@@ -225,7 +228,6 @@ class ClickAccessibilityService : AccessibilityService(), ControlBarView.Listene
         isRunning.value = false
         crosshairView?.setRunning(false)
         crosshairView?.setFraction(0f)
-        controlView?.setRunning(false)
     }
 
     /**
@@ -282,10 +284,24 @@ class ClickAccessibilityService : AccessibilityService(), ControlBarView.Listene
     // ---- 手势派发（FR-008 / FR-012）----
 
     private suspend fun performTap() {
-        val t = target
         clickCount++
         val n = clickCount
-        logger?.logClick(t.x, t.y, n)
+
+        // 以准星视图的"屏幕实际中心"作为点击坐标，确保点击落点与可见准星完全一致
+        // （规避悬浮窗坐标受状态栏/挖孔 inset 影响导致的视觉与落点错位）。
+        val loc = IntArray(2)
+        val view = crosshairView
+        val tx: Float
+        val ty: Float
+        if (view != null && crosshairAttached && view.width > 0) {
+            view.getLocationOnScreen(loc)
+            tx = loc[0] + view.width / 2f
+            ty = loc[1] + view.height / 2f
+        } else {
+            tx = target.x
+            ty = target.y
+        }
+        logger?.logClick(tx, ty, n)
 
         // 仅移除准星视觉层（它盖在落点上方会导致注入点击被判为 obscured 而丢弃）；
         // 控制条偏离落点、不参与移除，因此不会闪烁。
@@ -295,8 +311,8 @@ class ClickAccessibilityService : AccessibilityService(), ControlBarView.Listene
             delay(OVERLAY_SETTLE_MS)
             // path 必须有非零长度，否则 Android 16+ 可能不把它识别为有效点击。
             val path = Path().apply {
-                moveTo(t.x, t.y)
-                lineTo(t.x + 1f, t.y + 1f)
+                moveTo(tx, ty)
+                lineTo(tx + 1f, ty + 1f)
             }
             val stroke = GestureDescription.StrokeDescription(
                 path, 0L, currentConfig.pressDurationMs.coerceAtLeast(1L),

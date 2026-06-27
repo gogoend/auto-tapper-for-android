@@ -5,14 +5,14 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.hypot
 
 /**
- * 可触摸的控制条：开始/停止、拖拽手柄、退出，三个按钮横向排列。
- * 放置于离准星落点有偏移的位置，因此不会遮挡注入点击、也不会被注入点击误触，故无需移除。
+ * 可触摸的控制条：拖拽手柄 + 退出，两个按钮横向排列。
+ * 放在偏离准星落点的位置，始终存在、不参与移除（不闪烁），也不会被注入点击误触。
+ * 开始/停止按钮按 PRD 位于准星中心，由 CrosshairView 承载（不在此处）。
  */
 @SuppressLint("ViewConstructor")
 class ControlBarView(
@@ -23,60 +23,36 @@ class ControlBarView(
 ) : View(context) {
 
     interface Listener {
-        fun onStartStopTap()
         fun onExitTap()
         fun onDrag(dxScreen: Float, dyScreen: Float)
     }
 
-    private var running = false
-
     private val cy get() = height / 2f
     private fun cx(i: Int) = gap + buttonR + i * (2 * buttonR + gap)
 
-    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val iconFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.WHITE }
-    private val iconStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; color = Color.WHITE; strokeWidth = buttonR * 0.16f
+    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(235, 66, 66, 66)
     }
-    private val triangle = Path()
-
-    fun setRunning(value: Boolean) {
-        running = value
-        postInvalidate()
+    private val iconStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = Color.WHITE
+        strokeWidth = buttonR * 0.16f
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val y = cy
 
-        // 0: 开始/停止
-        val sx = cx(0)
-        bgPaint.color = if (running) Color.argb(235, 244, 67, 54) else Color.argb(235, 33, 150, 243)
-        canvas.drawCircle(sx, y, buttonR, bgPaint)
-        if (running) {
-            val s = buttonR * 0.42f
-            canvas.drawRect(sx - s, y - s, sx + s, y + s, iconFill)
-        } else {
-            val s = buttonR * 0.5f
-            triangle.reset()
-            triangle.moveTo(sx - s * 0.6f, y - s)
-            triangle.lineTo(sx - s * 0.6f, y + s)
-            triangle.lineTo(sx + s, y)
-            triangle.close()
-            canvas.drawPath(triangle, iconFill)
-        }
-
-        // 1: 拖拽手柄（四向）
-        val dx = cx(1)
-        bgPaint.color = Color.argb(235, 66, 66, 66)
+        // 0: 拖拽手柄（四向）
+        val dx = cx(0)
         canvas.drawCircle(dx, y, buttonR, bgPaint)
         val h = buttonR * 0.5f
         canvas.drawLine(dx - h, y, dx + h, y, iconStroke)
         canvas.drawLine(dx, y - h, dx, y + h, iconStroke)
 
-        // 2: 退出（X）
-        val ex = cx(2)
-        bgPaint.color = Color.argb(235, 66, 66, 66)
+        // 1: 退出（X）
+        val ex = cx(1)
         canvas.drawCircle(ex, y, buttonR, bgPaint)
         val e = buttonR * 0.42f
         canvas.drawLine(ex - e, y - e, ex + e, y + e, iconStroke)
@@ -84,7 +60,7 @@ class ControlBarView(
     }
 
     private var dragging = false
-    private var downIdx = -1
+    private var downExit = false
     private var lastRawX = 0f
     private var lastRawY = 0f
 
@@ -95,15 +71,14 @@ class ControlBarView(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 dragging = false
-                downIdx = -1
+                downExit = false
                 when {
-                    hit(1, event.x, event.y) -> {
+                    hit(0, event.x, event.y) -> {
                         dragging = true
                         lastRawX = event.rawX
                         lastRawY = event.rawY
                     }
-                    hit(0, event.x, event.y) -> downIdx = 0
-                    hit(2, event.x, event.y) -> downIdx = 2
+                    hit(1, event.x, event.y) -> downExit = true
                     else -> return false
                 }
                 return true
@@ -119,14 +94,9 @@ class ControlBarView(
             }
 
             MotionEvent.ACTION_UP -> {
-                if (!dragging) {
-                    when {
-                        downIdx == 0 && hit(0, event.x, event.y) -> listener.onStartStopTap()
-                        downIdx == 2 && hit(2, event.x, event.y) -> listener.onExitTap()
-                    }
-                }
+                if (!dragging && downExit && hit(1, event.x, event.y)) listener.onExitTap()
                 dragging = false
-                downIdx = -1
+                downExit = false
                 return true
             }
         }
