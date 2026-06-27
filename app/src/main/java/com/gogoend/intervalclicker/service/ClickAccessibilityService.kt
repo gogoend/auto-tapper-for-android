@@ -80,10 +80,12 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
 
     fun updateConfig(config: ClickConfig) {
         currentConfig = config.normalized()
+        logger?.enabled = currentConfig.loggingEnabled
     }
 
     fun showOverlay(config: ClickConfig) {
         currentConfig = config.normalized()
+        logger?.enabled = currentConfig.loggingEnabled
         if (overlayView != null) return
 
         val metrics = resources.displayMetrics
@@ -115,10 +117,11 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         view.setRunning(true)
         clickCount = 0
 
+        logger?.enabled = currentConfig.loggingEnabled
         clickJob = scope.launch {
             val interval = currentConfig.intervalMs
-            logger?.logEvent(
-                "START interval=${interval}ms press=${currentConfig.pressDurationMs}ms " +
+            logger?.startSession(
+                "interval=${interval}ms press=${currentConfig.pressDurationMs}ms " +
                     "fireImmediately=${currentConfig.fireImmediately} target=(${target.x.toInt()}, ${target.y.toInt()})",
             )
             val plan = scheduler.start(interval, currentConfig.fireImmediately)

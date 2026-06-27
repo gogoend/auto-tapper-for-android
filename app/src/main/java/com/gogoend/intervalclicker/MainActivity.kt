@@ -1,5 +1,7 @@
 package com.gogoend.intervalclicker
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -26,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,7 +48,9 @@ import com.gogoend.intervalclicker.permission.PermissionChecker
 import com.gogoend.intervalclicker.scheduler.StopReason
 import com.gogoend.intervalclicker.service.ClickAccessibilityService
 import com.gogoend.intervalclicker.ui.theme.IntervalClickerTheme
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class PermSnapshot(
     val canOverlay: Boolean,
@@ -86,10 +94,6 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
     val scope = rememberCoroutineScope()
     val config by repo.configFlow.collectAsState(initial = ClickConfig())
     val isRunning by ClickAccessibilityService.isRunning.collectAsState()
-    val logPath = remember {
-        (context.getExternalFilesDir(null) ?: context.filesDir)
-            .resolve(ClickLogger.FILE_NAME).absolutePath
-    }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
         Column(
@@ -113,7 +117,6 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
                     config = config,
                     isRunning = isRunning,
                     batteryOk = perms.battery,
-                    logPath = logPath,
                     onConfigChange = { updated ->
                         scope.launch { repo.save(updated) }
                         ClickAccessibilityService.instance?.updateConfig(updated)
@@ -162,12 +165,12 @@ private fun ConfigContent(
     config: ClickConfig,
     isRunning: Boolean,
     batteryOk: Boolean,
-    logPath: String,
     onConfigChange: (ClickConfig) -> Unit,
     onShowOverlay: () -> Unit,
     onStopForEdit: () -> Unit,
     onOpenBattery: () -> Unit,
 ) {
+    val context = LocalContext.current
     var showStopDialog by remember { mutableStateOf(false) }
 
     if (isRunning) {
@@ -219,6 +222,15 @@ private fun ConfigContent(
         ) { Text("切换") }
     }
 
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text("记录点击日志")
+        Switch(
+            checked = config.loggingEnabled,
+            enabled = editable,
+            onCheckedChange = { onConfigChange(config.copy(loggingEnabled = it)) },
+        )
+    }
+
     Spacer(Modifier.height(8.dp))
     Button(onClick = onShowOverlay, modifier = Modifier.fillMaxWidth()) {
         Text("显示悬浮窗")
@@ -227,7 +239,7 @@ private fun ConfigContent(
         "在悬浮窗上点击中心圆形按钮开始/停止；拖动上方手柄移动落点；点击 X 退出。",
         style = MaterialTheme.typography.bodySmall,
     )
-    Text("点击日志：$logPath", style = MaterialTheme.typography.bodySmall)
+    LogSection(context = context, isRunning = isRunning)
 
     if (!batteryOk) {
         Card(Modifier.fillMaxWidth()) {
@@ -271,5 +283,70 @@ private fun Stepper(
             OutlinedButton(onClick = onMinus, enabled = enabled) { Text("−") }
             OutlinedButton(onClick = onPlus, enabled = enabled) { Text("+") }
         }
+    }
+}
+
+@Composable
+private fun LogSection(context: Context, isRunning: Boolean) {
+    var refresh by remember { mutableIntStateOf(0) }
+    // isRunning 变化（会话开始/结束）或手动刷新时重新枚举日志文件
+    val files = remember(refresh, isRunning) { ClickLogger.listLogFiles(context) }
+    var selected by remember(files) { mutableStateOf(files.firstOrNull()) }
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("点击日志", style = MaterialTheme.typography.titleSmall)
+                OutlinedButton(onClick = { refresh++ }) { Text("刷新") }
+            }
+            Text("目录：${ClickLogger.logsDir(context).absolutePath}", style = MaterialTheme.typography.bodySmall)
+
+            if (files.isEmpty()) {
+                Text("暂无日志文件", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Box {
+                    OutlinedButton(onClick = { expanded = true }) {
+                        Text(selected?.name ?: "选择日志文件")
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        files.forEach { f ->
+                            DropdownMenuItem(
+                                text = { Text(f.name) },
+                                onClick = { selected = f; expanded = false },
+                            )
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        enabled = selected != null,
+                        onClick = { selected?.let { shareLog(context, it) } },
+                    ) { Text("分享/查看") }
+                    OutlinedButton(
+                        enabled = selected != null,
+                        onClick = { selected?.let { it.delete(); refresh++ } },
+                    ) { Text("删除") }
+                }
+                OutlinedButton(onClick = {
+                    files.forEach { it.delete() }
+                    refresh++
+                }) { Text("清空全部日志") }
+            }
+        }
+    }
+}
+
+private fun shareLog(context: Context, file: File) {
+    runCatching {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(
+            Intent.createChooser(intent, "分享/查看日志").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }

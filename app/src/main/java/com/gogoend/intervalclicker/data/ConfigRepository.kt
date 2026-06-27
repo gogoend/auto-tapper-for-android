@@ -21,6 +21,7 @@ class ConfigRepository(private val context: Context) {
         val PRESS = longPreferencesKey("press_ms")
         val FIRE_IMMEDIATELY = booleanPreferencesKey("fire_immediately")
         val ON_CALL = stringPreferencesKey("on_incoming_call")
+        val LOGGING_ENABLED = booleanPreferencesKey("logging_enabled")
     }
 
     val configFlow: Flow<ClickConfig> = context.dataStore.data.map { p ->
@@ -31,6 +32,7 @@ class ConfigRepository(private val context: Context) {
             onIncomingCall = runCatching {
                 CallAction.valueOf(p[Keys.ON_CALL] ?: CallAction.STOP.name)
             }.getOrDefault(CallAction.STOP),
+            loggingEnabled = p[Keys.LOGGING_ENABLED] ?: true,
         ).normalized()
     }
 
@@ -41,6 +43,7 @@ class ConfigRepository(private val context: Context) {
             p[Keys.PRESS] = c.pressDurationMs
             p[Keys.FIRE_IMMEDIATELY] = c.fireImmediately
             p[Keys.ON_CALL] = c.onIncomingCall.name
+            p[Keys.LOGGING_ENABLED] = c.loggingEnabled
         }
     }
 }
