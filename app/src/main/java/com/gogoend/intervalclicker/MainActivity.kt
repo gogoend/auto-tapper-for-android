@@ -227,6 +227,14 @@ private fun ConfigContent(
     Button(onClick = onShowOverlay, modifier = Modifier.fillMaxWidth()) {
         Text("显示悬浮窗")
     }
+    OutlinedButton(
+        onClick = { ClickAccessibilityService.instance?.testTapCenter() },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("诊断：3 秒后点屏幕中心（不显示悬浮窗）") }
+    Text(
+        "排查用：先打开目标 App，回到本页点此按钮，3 秒内切回目标 App，观察屏幕正中是否被点中。",
+        style = MaterialTheme.typography.bodySmall,
+    )
     Text(
         "在悬浮窗上点击中心圆形按钮开始/停止；拖动上方手柄移动落点；点击 X 退出。",
         style = MaterialTheme.typography.bodySmall,

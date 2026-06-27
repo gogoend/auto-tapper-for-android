@@ -164,6 +164,35 @@ class ClickAccessibilityService : AccessibilityService(), OverlayView.Listener {
         setOverlayTouchable(true)
     }
 
+    /**
+     * 诊断：移除一切悬浮窗后，3 秒倒计时再向屏幕中心派发一次点击。
+     * 用于隔离"悬浮窗干扰" vs "派发本身在本设备无效"。
+     */
+    fun testTapCenter() {
+        removeOverlay()
+        overlayShown.value = false
+        logger?.enabled = true
+        val m = resources.displayMetrics
+        val cx = m.widthPixels / 2f
+        val cy = m.heightPixels / 2f
+        logger?.startSession("DIAGNOSTIC no-overlay; will tap center ($cx, $cy) after 3s")
+        scope.launch {
+            delay(3000)
+            val path = Path().apply { moveTo(cx, cy) }
+            val stroke = GestureDescription.StrokeDescription(path, 0L, 80L)
+            val gesture = GestureDescription.Builder().addStroke(stroke).build()
+            val dispatched = dispatchGesture(
+                gesture,
+                object : GestureResultCallback() {
+                    override fun onCompleted(d: GestureDescription?) { logger?.logEvent("TEST tap onCompleted") }
+                    override fun onCancelled(d: GestureDescription?) { logger?.logEvent("TEST tap onCancelled") }
+                },
+                null,
+            )
+            logger?.logEvent("TEST tap dispatched at ($cx, $cy) returned=$dispatched (no overlay)")
+        }
+    }
+
     fun hideOverlayAndExit() {
         stopClicking(StopReason.EXIT)
         removeOverlay()
