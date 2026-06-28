@@ -18,7 +18,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,11 +58,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
@@ -469,10 +487,81 @@ private fun AboutContent(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Button(
-                onClick = { openUrl(context, "https://qr.alipay.com/fkx15249pnsrs4fgsqjmfed") },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("打开支付宝") }
+            DonatePulseButton(text = "打开支付宝，直接转账") {
+                openUrl(context, "https://qr.alipay.com/fkx15249pnsrs4fgsqjmfed")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DonatePulseButton(text: String, onClick: () -> Unit) {
+    val transition = rememberInfiniteTransition(label = "donate")
+    val ripple by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing), RepeatMode.Restart),
+        label = "ripple",
+    )
+    val shimmer by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart),
+        label = "shimmer",
+    )
+    val accent = MaterialTheme.colorScheme.primary
+    val onAccent = MaterialTheme.colorScheme.onPrimary
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 涟漪：从按钮外边缘向外扩散若干 dp 后淡出，循环（drawBehind 在 padding 之前，可绘制到留白区）
+            .drawBehind {
+                val pad = 10.dp.toPx()
+                val left = pad
+                val top = pad
+                val w = size.width - pad * 2
+                val h = size.height - pad * 2
+                val expand = ripple * pad
+                val alpha = (1f - ripple).coerceIn(0f, 1f)
+                drawRoundRect(
+                    color = accent.copy(alpha = alpha * 0.7f),
+                    topLeft = Offset(left - expand, top - expand),
+                    size = Size(w + expand * 2, h + expand * 2),
+                    cornerRadius = CornerRadius(h / 2f + expand),
+                    style = Stroke(width = 2.dp.toPx()),
+                )
+            }
+            .padding(10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clip(RoundedCornerShape(50))
+                .background(accent)
+                .clickable { onClick() }
+                // 扫光背景：一条斜向半透明白带横扫
+                .drawWithContent {
+                    drawContent()
+                    val band = size.width * 0.35f
+                    val xStart = -band + shimmer * (size.width + band)
+                    drawRect(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.35f),
+                                Color.Transparent,
+                            ),
+                            start = Offset(xStart, 0f),
+                            end = Offset(xStart + band, size.height),
+                        ),
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text, color = onAccent, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
