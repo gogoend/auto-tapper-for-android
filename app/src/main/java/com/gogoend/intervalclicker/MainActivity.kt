@@ -109,6 +109,7 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
     val overlayShown by ClickAccessibilityService.overlayShown.collectAsState()
     val serviceReady by ClickAccessibilityService.serviceReady.collectAsState()
     var showDiagnostics by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
 
     var phoneStateGranted by remember {
         mutableStateOf(
@@ -133,7 +134,11 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                if (showDiagnostics) "诊断与日志" else "自动连点器",
+                when {
+                    showDiagnostics -> "诊断与日志"
+                    showAbout -> "关于"
+                    else -> "自动连点器"
+                },
                 style = MaterialTheme.typography.headlineSmall,
             )
 
@@ -153,6 +158,8 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
                     },
                     onBack = { showDiagnostics = false },
                 )
+            } else if (showAbout) {
+                AboutContent(onBack = { showAbout = false })
             } else {
                 ConfigContent(
                     config = config,
@@ -183,6 +190,7 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
                         context.startActivity(PermissionChecker.batteryOptimizationSettingsIntent())
                     },
                     onOpenDiagnostics = { showDiagnostics = true },
+                    onOpenAbout = { showAbout = true },
                 )
             }
         }
@@ -219,6 +227,7 @@ private fun ConfigContent(
     onStopForEdit: () -> Unit,
     onOpenBattery: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
     var showStopDialog by remember { mutableStateOf(false) }
 
@@ -309,6 +318,9 @@ private fun ConfigContent(
     OutlinedButton(onClick = onOpenDiagnostics, modifier = Modifier.fillMaxWidth()) {
         Text("诊断与日志")
     }
+    OutlinedButton(onClick = onOpenAbout, modifier = Modifier.fillMaxWidth()) {
+        Text("关于")
+    }
 
     if (!batteryOk) {
         Card(Modifier.fillMaxWidth()) {
@@ -372,6 +384,32 @@ private fun DiagnosticsContent(
                 onClick = { ClickAccessibilityService.instance?.testTapCenter() },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("诊断：3 秒后点屏幕中心（不显示悬浮窗）") }
+        }
+    }
+}
+
+@Composable
+private fun AboutContent(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val version = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull().orEmpty()
+    }
+
+    OutlinedButton(onClick = onBack) { Text("← 返回") }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("自动连点器", style = MaterialTheme.typography.titleLarge)
+            if (version.isNotEmpty()) {
+                Text("版本 $version", style = MaterialTheme.typography.bodyMedium)
+            }
+            Text("作者：gogoend", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "© gogoend. 版权所有，保留所有权利。",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
