@@ -42,7 +42,7 @@ class CrosshairView(
     // 开始/停止按钮：在原比例基础上直径 +10dp，且半径不超出圆形轮廓
     private val buttonR = (circleR * 0.62f + dp(5f)).coerceAtMost(outlineR)
     private val crossHalf = dp(4f) // 十字总长 8dp
-    private val tickLen = 10f // 四周短线长度（px），中点与轮廓相交
+    private val tickLen = 32f // 四周短线长度（px），中点与轮廓相交
 
     // 圆形轮廓：白色实线
     private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -50,9 +50,10 @@ class CrosshairView(
         strokeWidth = dp(3f)
         color = Color.WHITE
     }
-    // 圆内 15% 黑色遮罩
+    // 15% 黑色遮罩——环形，仅覆盖四周短线所在的径向带（宽度=短线长度，居中于轮廓）
     private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
+        style = Paint.Style.STROKE
+        strokeWidth = tickLen
         color = Color.argb((0.15f * 255).toInt(), 0, 0, 0)
     }
     // 四周短线（指向圆心）
@@ -94,7 +95,7 @@ class CrosshairView(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // 圆内 15% 黑色遮罩
+        // 15% 黑色环形遮罩（与四周短线径向带重叠）
         canvas.drawCircle(c, c, outlineR, maskPaint)
         // 白色实线圆形轮廓
         canvas.drawCircle(c, c, outlineR, outlinePaint)
