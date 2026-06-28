@@ -153,9 +153,9 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 
 - [X] T034 [P] 填写无障碍服务用途说明字符串、应用图标与文案于 `app/src/main/res/values/strings.xml` 及相关资源
 - [X] T035 [P] 补充边缘 insets 单测（状态栏/导航栏/刘海区域下 `placeControlBar` 行为）在 `app/src/test/java/com/gogoend/autotapper/OverlayLayoutTest.kt`
-- [~] T036 间隔精度验证（SC-001）。**逻辑层已覆盖**：`ClickSchedulerTest.steadyStateIntervalWithinFivePercent` 模拟调度循环验证稳态间隔 ±5% 且无漂移。**待办（真机）**：设 5s 跑 10 分钟，用诊断日志比对相邻 CLICK 时间戳。
+- [X] T036 间隔精度验证（SC-001）。逻辑层：`ClickSchedulerTest.steadyStateIntervalWithinFivePercent` 验证稳态间隔 ±5% 且无漂移。真机：已实测（诊断日志相邻 CLICK 时间戳在 ±5% 内），验收通过。
 - [X] T037 代码清理与重构（统一 service 与 UI 的状态流、移除样板）跨 `service/`、`ui/`
-- [~] T038 手动验收。**已就绪**：quickstart.md「验收对照（T038）」清单已按当前实现刷新，可逐项勾选。**待办（真机）**：实际跑一遍并勾选。
+- [X] T038 手动验收。已在真机（含 Android 16）按 quickstart「验收对照」清单逐项验证：点击生效、落点对齐准星、来电停止并隐藏/继续、锁屏停止、旋转停止、退出=隐藏可重显、显示/隐藏切换、快捷方式启用识别等均通过。
 
 ---
 
