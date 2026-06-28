@@ -47,7 +47,7 @@ enum class StopReason { USER, SCREEN_OFF, INCOMING_CALL, CONFIG_CHANGE, EXIT }
 | 信号 | 监听方式 | 动作 |
 |------|----------|------|
 | 锁屏/息屏 | `BroadcastReceiver(ACTION_SCREEN_OFF)` | `stopClicking(SCREEN_OFF)`（FR-020） |
-| 来电 | `TelephonyCallback`/`PhoneStateListener` | state≠IDLE：STOP→`stopClicking(INCOMING_CALL)` 并取消临近 tap；CONTINUE→保持（FR-018/019） |
+| 来电 | `TelephonyCallback`/`PhoneStateListener` | state≠IDLE：STOP→`stopClicking(INCOMING_CALL)` + `removeOverlay()`（停止并隐藏悬浮窗，取消临近 tap）；CONTINUE→保持（FR-018/019） |
 | 旋转/尺寸变化 | `onConfigurationChanged` | `stopClicking(CONFIG_CHANGE)` + 提示重新确认位置（FR-027） |
 
 - 所有中断停止后**不自动恢复**（FR-028）。

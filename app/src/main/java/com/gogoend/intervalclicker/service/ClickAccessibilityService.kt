@@ -216,9 +216,14 @@ class ClickAccessibilityService :
     private fun handleCallState(state: Int) {
         if (state == TelephonyManager.CALL_STATE_IDLE) return // 通话结束不自动恢复（FR-028）
         // 来电响铃或通话中：按配置处理（FR-018/019）
-        if (isRunning.value && currentConfig.onIncomingCall == CallAction.STOP) {
-            logger?.logEvent("INCOMING_CALL state=$state -> STOP")
-            stopClicking(StopReason.INCOMING_CALL) // 取消协程即取消临近待派发点击（FR-018）
+        if (currentConfig.onIncomingCall == CallAction.STOP &&
+            (isRunning.value || overlayShown.value)
+        ) {
+            logger?.logEvent("INCOMING_CALL state=$state -> STOP + HIDE")
+            // 停止定时并隐藏悬浮窗（FR-018）：取消协程即取消临近待派发点击
+            stopClicking(StopReason.INCOMING_CALL)
+            removeOverlay()
+            overlayShown.value = false
         }
     }
 
