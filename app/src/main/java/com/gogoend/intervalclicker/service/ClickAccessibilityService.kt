@@ -246,7 +246,7 @@ class ClickAccessibilityService :
         screenH = m.heightPixels
         val density = m.density
         csSize = (minOf(screenW, screenH) * 0.28f).toInt()
-        val buttonR = 26f * 0.75f * density // 按钮缩小为原来的 3/4
+        val buttonR = 14f * density // 在上次 3/4 基础上再缩小为 3/4（≈14.6dp）
         val gap = 12f * density
         // 控制条只有 2 个按钮（拖拽手柄 + 退出）
         controlW = (gap * 3 + buttonR * 4).toInt()
