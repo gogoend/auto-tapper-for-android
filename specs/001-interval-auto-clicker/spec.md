@@ -1,4 +1,4 @@
-# Feature Specification: 自动连点器（Interval Auto-Clicker）
+# Feature Specification: 自动连点器（Auto Tapper）
 
 **Feature Branch**: `001-interval-auto-clicker`
 

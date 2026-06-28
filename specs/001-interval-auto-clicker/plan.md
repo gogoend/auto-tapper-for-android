@@ -1,4 +1,4 @@
-# Implementation Plan: 自动连点器（Interval Auto-Clicker）
+# Implementation Plan: 自动连点器（Auto Tapper）
 
 **Branch**: `001-interval-auto-clicker` | **Date**: 2026-06-27 | **Spec**: [spec.md](spec.md)
 

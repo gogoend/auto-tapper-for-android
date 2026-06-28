@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Interval Clicker"
+rootProject.name = "Auto Tapper"
 include(":app")
  

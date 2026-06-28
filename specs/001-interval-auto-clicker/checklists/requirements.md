@@ -1,4 +1,4 @@
-# Specification Quality Checklist: 自动连点器（Interval Auto-Clicker）
+# Specification Quality Checklist: 自动连点器（Auto Tapper）
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-06-27

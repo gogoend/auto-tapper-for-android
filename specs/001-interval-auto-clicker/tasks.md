@@ -1,8 +1,8 @@
 ---
-description: "Task list for 自动连点器 (Interval Auto-Clicker) implementation"
+description: "Task list for 自动连点器 (Auto Tapper) implementation"
 ---
 
-# Tasks: 自动连点器（Interval Auto-Clicker）
+# Tasks: 自动连点器（Auto Tapper）
 
 **Input**: Design documents from `specs/001-interval-auto-clicker/`
 
