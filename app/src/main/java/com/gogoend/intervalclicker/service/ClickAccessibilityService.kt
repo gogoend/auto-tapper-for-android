@@ -251,7 +251,9 @@ class ClickAccessibilityService :
         // 控制条只有 2 个按钮（拖拽手柄 + 退出）
         controlW = (gap * 3 + buttonR * 4).toInt()
         controlH = (buttonR * 2 + gap * 2).toInt()
-        controlGapPx = -30f * density // 准星与控制条间距（负值=略微靠近/重叠）
+        // 让控制条按钮上沿与准星圆形轮廓底部"外切"：
+        // 圆半径(=csSize*0.40，见 CrosshairView) - 窗口半高(csSize/2) - 控制条内上边距(gap)
+        controlGapPx = csSize * 0.40f - csSize / 2f - gap
         target = ClickTarget.center(screenW, screenH)
 
         // 准星 + 中心开始/停止按钮（可触摸；仅在派发瞬间临时移除）
