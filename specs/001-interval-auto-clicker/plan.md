@@ -12,21 +12,23 @@
 
 **Language/Version**: Kotlin 2.2.10（Java 11 desugar 目标）
 
-**Primary Dependencies**: Jetpack Compose（BOM 2026.02.01, Material3）、AndroidX Activity/Lifecycle、AccessibilityService + WindowManager（系统悬浮窗与手势派发）、Jetpack DataStore（Preferences）、kotlinx-coroutines（调度循环）
+**Primary Dependencies**: 配置/权限界面用 Jetpack Compose（BOM 2026.02.01, Material3）；**悬浮层用自绘 View**（非 Compose，见 research R15）；AndroidX Activity/Lifecycle、AccessibilityService + WindowManager（`TYPE_ACCESSIBILITY_OVERLAY` 悬浮窗与 `dispatchGesture` 手势派发）、Jetpack DataStore（Preferences）、kotlinx-coroutines（调度循环）
 
-**Storage**: DataStore Preferences（仅持久化点击配置；准星位置不持久化）
+**Storage**: DataStore Preferences（持久化点击配置含日志开关；准星位置不持久化）
 
-**Testing**: JUnit4 单元测试（纯 Kotlin 的调度器与倒计时数学、配置校验）；Compose UI 测试与少量 Espresso 仪器测试（配置/权限界面）。无障碍服务与跨应用手势依赖真机/系统授权，以手动验证为主。
+**Testing**: JUnit4 单元测试（纯 Kotlin 的调度器、倒计时、边缘布局、配置校验）；无障碍服务与跨应用手势依赖真机/系统授权，以手动验证为主。
 
-**Target Platform**: Android（minSdk 26 / targetSdk 36，compileSdk 36）
+**Target Platform**: Android（minSdk 26 / targetSdk 36，**compileSdk 37** —— 既有依赖 core-ktx 1.19.0 等要求 37）
 
 **Project Type**: 单模块 Android 应用（`:app`），package `com.gogoend.intervalclicker`
 
 **Performance Goals**: 间隔精度 ±5%（SC-001）；倒计时动画与界面流畅、无延迟累积导致的批量齐发（SC-002/FR-013）；点击触达成功率 ≥99%（SC-006）
 
-**Constraints**: 必须穿透自身半透明悬浮按钮、点击作用于下方目标（FR-012）；运行期间不可改配置（FR-026）；锁屏/旋转/来电按规则停止（FR-018/020/027/028）；后台存活为 best-effort（FR-021），依赖用户开启可选系统设置
+**Constraints**: 注入点击必须真正作用于下方目标——在 Android 16+ 需"派发瞬间移除悬浮窗 + 非零长度路径"（FR-012，见 research R12/R13）；运行期间不可改配置（FR-026）；锁屏/旋转/来电按规则停止（FR-018/020/027/028，**US4 尚未实现**）；后台存活为 best-effort（FR-021）
 
-**Scale/Scope**: 单用户、单点击位置、本地运行、无网络/无账户；约 3 个界面（配置、权限引导、悬浮控制层）+ 1 个无障碍服务
+**权限说明（修订）**: 因悬浮层使用 `TYPE_ACCESSIBILITY_OVERLAY`，**不需要 `SYSTEM_ALERT_WINDOW`**；核心可用性仅取决于无障碍服务是否真正连接（`serviceReady`，见 research R16）。
+
+**Scale/Scope**: 单用户、单点击位置、本地运行、无网络/无账户；界面：配置、权限引导、诊断与日志、悬浮控制层（两窗口）+ 1 个无障碍服务
 
 ## Constitution Check
 
@@ -61,33 +63,47 @@ specs/001-interval-auto-clicker/
 
 沿用现有单模块结构 `app/`，在 `com.gogoend.intervalclicker` 下按职责分包：
 
+实际落地结构（单模块 `app/`，package `com.gogoend.intervalclicker`）：
+
 ```text
 app/src/main/java/com/gogoend/intervalclicker/
-├── MainActivity.kt                  # 配置界面 + 权限引导宿主（已存在，待扩展）
+├── MainActivity.kt                  # 配置页 + 权限引导 + 诊断与日志页（Compose，全部在此）
 ├── ui/
 │   ├── theme/                       # 既有主题
-│   ├── config/                      # 配置界面 Composable + 状态
-│   ├── onboarding/                  # 首启权限/省电引导 Composable
-│   └── overlay/                     # 悬浮层 Composable：准星、扇形开始/停止、拖拽手柄、退出
+│   └── overlay/                     # 悬浮层（自绘 View）
+│       ├── CrosshairView.kt         # 准星 + 中心开始/停止按钮（落点处，派发瞬间临时移除）
+│       ├── ControlBarView.kt        # 控制条：拖拽手柄 + 退出（偏离落点，常驻不闪）
+│       └── OverlayLayout.kt         # 纯逻辑：arrangeControls 边缘布局（可单测）
 ├── service/
-│   └── ClickAccessibilityService.kt # 核心：悬浮窗管理、dispatchGesture、调度循环、来电/锁屏/旋转监听
+│   └── ClickAccessibilityService.kt # 核心：两窗口管理、dispatchGesture、调度循环、serviceReady
 ├── scheduler/
 │   ├── ClickScheduler.kt            # 纯逻辑：自重排调度，避免堆积（可单测）
-│   └── CountdownModel.kt            # 纯逻辑：扇形剩余时间→角度映射（可单测）
+│   ├── CountdownModel.kt            # 纯逻辑：扇形剩余时间→角度映射（可单测）
+│   └── ClickSession.kt              # SessionState / StopReason / ClickSession
 ├── data/
-│   ├── ClickConfig.kt               # 配置数据模型 + 校验（含最小间隔）
+│   ├── ClickConfig.kt               # 配置模型 + 校验（含最小间隔、loggingEnabled）
+│   ├── ClickTarget.kt               # 准星位置（不持久化）
 │   └── ConfigRepository.kt          # DataStore 读写
+├── logging/
+│   └── ClickLogger.kt               # 每会话日志文件（外部专属目录），含坐标
 └── permission/
-    └── PermissionChecker.kt         # 悬浮窗/无障碍/省电状态检查 + 跳转 Intent
+    └── PermissionChecker.kt         # 无障碍(以 serviceReady 为准)/电池状态检查 + 跳转 Intent
 
-app/src/main/AndroidManifest.xml     # 声明 AccessibilityService、SYSTEM_ALERT_WINDOW、READ_PHONE_STATE 等
-app/src/main/res/xml/                # accessibility_service_config.xml
+app/src/main/AndroidManifest.xml     # 声明 AccessibilityService、READ_PHONE_STATE、FileProvider（SYSTEM_ALERT_WINDOW 已声明但非必需）
+app/src/main/res/xml/                # accessibility_service_config.xml、file_paths.xml
 
-app/src/test/java/com/gogoend/intervalclicker/      # JUnit4：ClickScheduler、CountdownModel、ClickConfig 校验
-app/src/androidTest/java/com/gogoend/intervalclicker/ # Compose/Espresso：配置与权限界面
+app/src/test/java/com/gogoend/intervalclicker/      # JUnit4：ClickScheduler、CountdownModel、OverlayLayout
 ```
 
-**Structure Decision**: 单模块 Android 应用，保持现有 `:app` 模块与 `com.gogoend.intervalclicker` 包名。核心可测逻辑（`scheduler/`、`data/` 校验）与 Android 框架（`service/`、`ui/`）分离，使调度与倒计时数学可在纯 JVM 单元测试中验证；无障碍服务作为唯一长生命周期组件统一承载悬浮窗、手势派发与中断监听。
+**Structure Decision**: 单模块 Android 应用。核心可测逻辑（`scheduler/`、`ui/overlay/OverlayLayout`、`data/` 校验）与 Android 框架解耦，可在纯 JVM 单元测试验证；无障碍服务作为唯一长生命周期组件承载悬浮窗、手势派发与（规划中的）中断监听。
+
+> **实现差异（相对 Phase 0/1 初始设计，详见 research R12–R16）**：
+> 1. 悬浮层为**自绘 View + 两窗口**（非 Compose、非单窗口）；
+> 2. 窗口类型 `TYPE_ACCESSIBILITY_OVERLAY`（非 `TYPE_APPLICATION_OVERLAY`），**不需 SYSTEM_ALERT_WINDOW**；
+> 3. 点击派发：派发瞬间移除准星窗 + 沉降 + 非零长度路径 + 用 `getLocationOnScreen` 取真实落点；
+> 4. 退出按钮 = 隐藏悬浮窗（不 `disableSelf`）；配置页有显示/隐藏切换、独立"诊断与日志"页；
+> 5. 无障碍授权判定以 `serviceReady`（服务实际连接）为准；
+> 6. **US4（来电/锁屏/旋转中断）尚未实现**；compileSdk 提升至 37。
 
 ## Complexity Tracking
 

@@ -62,9 +62,11 @@
 
 | 字段 | 类型 | 必需性 | 说明 |
 |------|------|--------|------|
-| `canDrawOverlay` | Boolean | 必需 | `Settings.canDrawOverlays()`（FR-022） |
-| `accessibilityEnabled` | Boolean | 必需 | 本无障碍服务是否启用（FR-022） |
-| `readPhoneStateGranted` | Boolean | 条件必需 | 来电检测需要；缺失则来电动作不生效（R5） |
+| `serviceConnected` | Boolean | 必需 | 无障碍服务是否真正连接（`serviceReady`，授权判定的权威来源，R16） |
+| `accessibilityEnabled` | Boolean | 必需 | `enabled_accessibility_services` 含本服务（退路，长/短组件名匹配） |
+| `canDrawOverlay` | Boolean | 不需要 | 悬浮层用 `TYPE_ACCESSIBILITY_OVERLAY`，无需 `SYSTEM_ALERT_WINDOW`（R13） |
+| `readPhoneStateGranted` | Boolean | 条件必需 | 来电检测需要；缺失则来电动作不生效（R5，US4 规划中） |
 | `ignoringBatteryOpt` | Boolean | 可选 | 电池优化豁免（FR-023，best-effort） |
 
-- `isCoreUsable = canDrawOverlay && accessibilityEnabled`。为 false 时核心功能（开始）不可用并持续引导。
+- `isCoreUsable = serviceConnected || accessibilityEnabled`。为 false 时显示无障碍引导，核心功能（开始/显示悬浮窗）不可用；服务连接后界面响应式自动解除拦截。
+- **不可作为授权依据**：`accessibility_shortcut_target_service` / `accessibility_button_targets`（被指派 ≠ 正在运行，R16）。

@@ -75,3 +75,35 @@
 - `androidx.datastore:datastore-preferences`
 - `org.jetbrains.kotlinx:kotlinx-coroutines-android`
 - （测试）现有 JUnit4 即可覆盖纯逻辑；Compose 测试沿用现有 BOM 工件。
+
+---
+
+## Phase 2 实现期发现（Android 16/17 真机踩坑与最终方案）
+
+> 以下为实现并在 Pixel 10 Pro XL（Android 16）真机 + Android 17 模拟器调试中发现的关键问题；Android 15 模拟器不复现，均为 16+ 行为收紧导致。这些发现**修订/补充**了上文部分决策（尤其 R1/R2/R3/R11）。
+
+### R12. 注入手势必须使用非零长度路径
+- **Decision**: `GestureDescription` 的 `Path` 必须 `moveTo(x,y)` 后再 `lineTo(x+1,y+1)`，不能只有 `moveTo`。
+- **Symptom**: 仅 `moveTo` 的零长度路径在 Android 16/17 上 `dispatchGesture` 返回 true、回调 `onCompleted`，但目标 App 无反应（Pointer location 能看到注入点、Show taps 无白点）；Android 15 正常。
+
+### R13. 可见悬浮窗会使注入点击被判 obscured 而丢弃 → 派发瞬间移除悬浮窗
+- **Decision**: 每次派发点击前用 `WindowManager.removeViewImmediate` **同步移除**落点上方的悬浮窗，等待约 90ms 沉降（`OVERLAY_SETTLE_MS`）后再 `dispatchGesture`，完成回调后再 `addView` 恢复。
+- **Rationale**: Android 16+ 收紧"被遮挡触摸"策略：只要有**可见**窗口盖在落点上方（即使 `FLAG_NOT_TOUCHABLE`、即使设了 `alpha ≤ 0.8`），下发给目标的注入手势会被判为 obscured 丢弃。彻底移除窗口是唯一稳定办法。
+- **窗口类型修正（对 R2）**: 悬浮窗用 `TYPE_ACCESSIBILITY_OVERLAY`（无障碍服务可信窗口，**不需要 `SYSTEM_ALERT_WINDOW`**）。曾误用 `TYPE_APPLICATION_OVERLAY`（非可信、需悬浮窗权限）会加剧 obscured 丢弃。
+- **Alternatives considered**: 仅切 `FLAG_NOT_TOUCHABLE`（异步、有竞争，16+ 失效）；降 `alpha`（不足以避免丢弃）；官方 `attachAccessibilityOverlayToDisplay`（SurfaceControl，复杂度高，暂未采用）。
+
+### R14. 落点与可见准星错位 → 以准星视图实际屏幕中心为派发坐标
+- **Decision**: 派发前用 `crosshairView.getLocationOnScreen()` 取准星视图的真实屏幕中心作为点击坐标，而非用窗口 `params.x/y` 推算。
+- **Rationale**: 悬浮窗 `params.y` 受状态栏/挖孔 inset 影响，导致渲染出来的准星与 `dispatchGesture` 的绝对坐标错位（表现为"点击点比可见准星偏上约一个状态栏高度"）。
+
+### R15. 悬浮层改为自绘 View + 两窗口结构（对 R2/R10 的修订）
+- **Decision**: 放弃"Compose-in-overlay"，改用自绘 `View`：
+  - **CrosshairView**（落点处）：画十字 + 圆轮廓 + 中心开始/停止按钮（开始=圆形、停止=扇形倒计时，符合 PRD），可点击；**仅此窗口在每次派发时临时移除**。
+  - **ControlBarView**（偏离落点）：拖拽手柄 + 退出按钮，常驻、不参与移除（故不闪烁），也不会被注入点击误触。
+- **Rationale**: WindowManager 承载 Compose 需自建 Lifecycle/SavedState/ViewModelStore owner，脆弱；自绘 View 更稳。两窗口把"必须随点击闪烁的视觉层"与"需稳定的控制层"分离，最小化闪烁。
+- 纯逻辑（`arrangeControls`/`CountdownModel`/`ClickScheduler`）保持不变、仍可单测。
+
+### R16. 无障碍是否启用以"服务实际连接"为准
+- **Decision**: 判定"已授权"优先看 `ClickAccessibilityService.serviceReady`（`onServiceConnected` 置真、`onUnbind/onDestroy` 置假），界面对其做响应式订阅；退路仅匹配 `enabled_accessibility_services`（长/短两种组件名格式）。
+- **不可作为依据**: `accessibility_shortcut_target_service` / `accessibility_button_targets`——被指派到快捷方式/辅助功能按钮 ≠ 服务正在运行；据此判定会出现"界面显示可用但服务未连接、显示悬浮窗无效"。
+- **退出语义修正（对 FR-011）**: 悬浮窗退出按钮 = **隐藏悬浮窗并停止计时**（不调用 `disableSelf()`），保持服务存活以便再次显示；配置页提供显示/隐藏切换。

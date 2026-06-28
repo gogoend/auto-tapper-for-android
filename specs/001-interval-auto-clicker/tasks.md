@@ -12,6 +12,8 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 **Organization**: 任务按用户故事分组，每个故事可独立实现与验证。
 
+> **实现落地差异（务必参见 plan.md「实现差异」与 research R12–R16）**：悬浮层最终为**自绘 View + 两窗口**（`ui/overlay/CrosshairView.kt`、`ControlBarView.kt`），窗口类型 `TYPE_ACCESSIBILITY_OVERLAY`（非 `TYPE_APPLICATION_OVERLAY`、无需 `SYSTEM_ALERT_WINDOW`）；配置/权限/诊断界面均在 `MainActivity.kt`（非独立 `ui/config`、`ui/onboarding` 文件）；点击派发采用"移除准星窗 + 沉降 + 非零路径 + getLocationOnScreen"；退出=隐藏；无障碍判定以 serviceReady 为准。下文勾选项的文件名/技术描述以此为准修订。
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: 可并行（不同文件、无未完成依赖）
