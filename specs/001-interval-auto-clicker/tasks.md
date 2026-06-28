@@ -159,6 +159,22 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 
 ---
 
+## Phase 9: 后期新增与细化（tasks 生成之后加入 spec，已实现，回填）
+
+> 这些条目对应在 `/speckit-tasks` 之后才补进 spec 的需求与实现期细化（见 `/speckit-analyze` 的 G1/G2）。均已实现并通过构建/单测，此处回填以保持覆盖完整。
+
+- [X] T039 [US3] FR-030：点击间隔/按下时长改为**数字输入框 + 加/减按钮**，统一钳制校验（`NumberField`）在 `MainActivity.kt`
+- [X] T040 FR-031：独立**"诊断与日志"页**（日志开关、日志文件分享/查看/删除/清空、点击派发自检）在 `MainActivity.kt`（`DiagnosticsContent`）
+- [X] T041 FR-032：独立**"关于"页**（应用信息 + 项目/与作者联系/请作者喝咖啡三组；支付宝转账按钮含扫光+涟漪动画）在 `MainActivity.kt`（`AboutContent`/`DonatePulseButton`）
+- [X] T042 [US4] FR-018 细化：来电「停止定时」改为**停止并隐藏悬浮窗**于 `service/ClickAccessibilityService.kt`
+- [X] T043 [US5] FR-022 细化：无障碍是否启用**以服务实际连接（serviceReady）为准**，兼容快捷方式/辅助功能按钮启用于 `permission/PermissionChecker.kt` 与 `MainActivity.kt`
+- [X] T044 [US5] FR-023 细化：后台存活引导**拆为两个独立入口**（电池优化 / 允许后台运行-自启动）于 `MainActivity.kt`
+- [X] T045 构建/命名：compileSdk 37；包名 `com.gogoend.autotapper`、显示名 `Auto Tapper`、退出=隐藏（FR-011）、显示/隐藏切换（FR-029）
+
+**Checkpoint**: spec 现有 FR-001~FR-032 均有任务覆盖。
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
