@@ -13,7 +13,7 @@ data class ClickConfig(
     val intervalMs: Long = DEFAULT_INTERVAL_MS,
     val pressDurationMs: Long = DEFAULT_PRESS_DURATION_MS,
     val fireImmediately: Boolean = true,
-    val onIncomingCall: CallAction = CallAction.STOP,
+    val onIncomingCall: CallAction = CallAction.CONTINUE,
     val loggingEnabled: Boolean = true,
 ) {
     /** 最小允许间隔 = max(下限, 按下时长 + 缓冲)（R9 / FR-024）。 */

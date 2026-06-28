@@ -30,8 +30,8 @@ class ConfigRepository(private val context: Context) {
             pressDurationMs = p[Keys.PRESS] ?: ClickConfig.DEFAULT_PRESS_DURATION_MS,
             fireImmediately = p[Keys.FIRE_IMMEDIATELY] ?: true,
             onIncomingCall = runCatching {
-                CallAction.valueOf(p[Keys.ON_CALL] ?: CallAction.STOP.name)
-            }.getOrDefault(CallAction.STOP),
+                CallAction.valueOf(p[Keys.ON_CALL] ?: CallAction.CONTINUE.name)
+            }.getOrDefault(CallAction.CONTINUE),
             loggingEnabled = p[Keys.LOGGING_ENABLED] ?: true,
         ).normalized()
     }
