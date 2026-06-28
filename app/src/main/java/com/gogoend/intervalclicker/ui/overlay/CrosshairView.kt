@@ -38,8 +38,8 @@ class CrosshairView(
 
     private val c get() = sizePx / 2f
     private val circleR = sizePx * 0.40f
-    // 开始/停止按钮：在原比例基础上直径 +20dp，且半径不超出圆形轮廓
-    private val buttonR = (circleR * 0.62f + dp(10f)).coerceAtMost(circleR)
+    // 开始/停止按钮：在原比例基础上直径 +10dp，且半径不超出圆形轮廓
+    private val buttonR = (circleR * 0.62f + dp(5f)).coerceAtMost(circleR)
     private val crossHalf = dp(4f) // 十字总长 8dp
 
     // 外圈：黑白相间实线（白底实线 + 黑色虚线叠加），保证深浅背景下都可见

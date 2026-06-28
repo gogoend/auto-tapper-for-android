@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.hypot
@@ -38,23 +39,50 @@ class ControlBarView(
         style = Paint.Style.STROKE
         color = Color.WHITE
         strokeWidth = buttonR * 0.16f
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val iconFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.WHITE
+    }
+    private val arrowPath = Path()
+
+    /** 在 (cxp, cyp) 处画一个指向 dir（0=上,1=下,2=左,3=右）的小箭头，箭尖距中心 len。 */
+    private fun drawArrowHead(canvas: Canvas, cxp: Float, cyp: Float, len: Float, dir: Int) {
+        val a = buttonR * 0.22f // 箭头大小
+        arrowPath.reset()
+        when (dir) {
+            0 -> { arrowPath.moveTo(cxp, cyp - len); arrowPath.lineTo(cxp - a, cyp - len + a); arrowPath.lineTo(cxp + a, cyp - len + a) }
+            1 -> { arrowPath.moveTo(cxp, cyp + len); arrowPath.lineTo(cxp - a, cyp + len - a); arrowPath.lineTo(cxp + a, cyp + len - a) }
+            2 -> { arrowPath.moveTo(cxp - len, cyp); arrowPath.lineTo(cxp - len + a, cyp - a); arrowPath.lineTo(cxp - len + a, cyp + a) }
+            3 -> { arrowPath.moveTo(cxp + len, cyp); arrowPath.lineTo(cxp + len - a, cyp - a); arrowPath.lineTo(cxp + len - a, cyp + a) }
+        }
+        arrowPath.close()
+        canvas.drawPath(arrowPath, iconFill)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val y = cy
 
-        // 0: 拖拽手柄（四向）
+        // 0: 拖拽手柄（四向移动：十字 + 四个箭头）
         val dx = cx(0)
         canvas.drawCircle(dx, y, buttonR, bgPaint)
-        val h = buttonR * 0.5f
+        val h = buttonR * 0.46f
         canvas.drawLine(dx - h, y, dx + h, y, iconStroke)
         canvas.drawLine(dx, y - h, dx, y + h, iconStroke)
+        drawArrowHead(canvas, dx, y, h, 0)
+        drawArrowHead(canvas, dx, y, h, 1)
+        drawArrowHead(canvas, dx, y, h, 2)
+        drawArrowHead(canvas, dx, y, h, 3)
 
-        // 1: 退出（X）
+        // 1: 退出（圆形红底 + 白色 X）
         val ex = cx(1)
+        bgPaint.color = Color.argb(235, 200, 60, 60)
         canvas.drawCircle(ex, y, buttonR, bgPaint)
-        val e = buttonR * 0.42f
+        bgPaint.color = Color.argb(235, 66, 66, 66) // 复原供下次绘制
+        val e = buttonR * 0.4f
         canvas.drawLine(ex - e, y - e, ex + e, y + e, iconStroke)
         canvas.drawLine(ex - e, y + e, ex + e, y - e, iconStroke)
     }
