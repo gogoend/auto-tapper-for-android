@@ -96,6 +96,7 @@ class ClickAccessibilityService :
     private fun teardown() {
         stopClicking(StopReason.EXIT)
         removeOverlay()
+        overlayShown.value = false
         serviceReady.value = false
         if (instance === this) instance = null
     }
@@ -262,11 +263,11 @@ class ClickAccessibilityService :
         }
     }
 
-    fun hideOverlayAndExit() {
+    /** 收起悬浮窗（停止点击并移除悬浮窗），但保持无障碍服务存活，便于之后再次显示。 */
+    fun hideOverlay() {
         stopClicking(StopReason.EXIT)
         removeOverlay()
         overlayShown.value = false
-        disableSelf()
     }
 
     private fun removeOverlay() {
@@ -363,7 +364,7 @@ class ClickAccessibilityService :
         if (isRunning.value) stopClicking(StopReason.USER) else startClicking()
     }
 
-    override fun onExitTap() = hideOverlayAndExit()
+    override fun onExitTap() = hideOverlay()
 
     override fun onDrag(dxScreen: Float, dyScreen: Float) {
         target = ClickTarget(

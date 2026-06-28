@@ -94,6 +94,7 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
     val scope = rememberCoroutineScope()
     val config by repo.configFlow.collectAsState(initial = ClickConfig())
     val isRunning by ClickAccessibilityService.isRunning.collectAsState()
+    val overlayShown by ClickAccessibilityService.overlayShown.collectAsState()
 
     Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
         Column(
@@ -114,14 +115,20 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
                 ConfigContent(
                     config = config,
                     isRunning = isRunning,
+                    overlayShown = overlayShown,
                     batteryOk = perms.battery,
                     onConfigChange = { updated ->
                         scope.launch { repo.save(updated) }
                         ClickAccessibilityService.instance?.updateConfig(updated)
                     },
-                    onShowOverlay = {
-                        scope.launch { repo.save(config) }
-                        ClickAccessibilityService.instance?.showOverlay(config)
+                    onToggleOverlay = {
+                        val svc = ClickAccessibilityService.instance
+                        if (overlayShown) {
+                            svc?.hideOverlay()
+                        } else {
+                            scope.launch { repo.save(config) }
+                            svc?.showOverlay(config)
+                        }
                     },
                     onStopForEdit = {
                         ClickAccessibilityService.instance?.stopClicking(StopReason.USER)
@@ -156,9 +163,10 @@ private fun PermissionGate(
 private fun ConfigContent(
     config: ClickConfig,
     isRunning: Boolean,
+    overlayShown: Boolean,
     batteryOk: Boolean,
     onConfigChange: (ClickConfig) -> Unit,
-    onShowOverlay: () -> Unit,
+    onToggleOverlay: () -> Unit,
     onStopForEdit: () -> Unit,
     onOpenBattery: () -> Unit,
 ) {
@@ -224,8 +232,8 @@ private fun ConfigContent(
     }
 
     Spacer(Modifier.height(8.dp))
-    Button(onClick = onShowOverlay, modifier = Modifier.fillMaxWidth()) {
-        Text("显示悬浮窗")
+    Button(onClick = onToggleOverlay, modifier = Modifier.fillMaxWidth()) {
+        Text(if (overlayShown) "隐藏悬浮窗" else "显示悬浮窗")
     }
     OutlinedButton(
         onClick = { ClickAccessibilityService.instance?.testTapCenter() },
@@ -236,7 +244,7 @@ private fun ConfigContent(
         style = MaterialTheme.typography.bodySmall,
     )
     Text(
-        "在悬浮窗上点击中心圆形按钮开始/停止；拖动上方手柄移动落点；点击 X 退出。",
+        "准星中心圆形按钮开始/停止；控制条拖拽手柄移动落点；X 收起悬浮窗（可在此处重新显示）。",
         style = MaterialTheme.typography.bodySmall,
     )
     LogSection(context = context, isRunning = isRunning)
