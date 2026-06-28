@@ -12,10 +12,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -24,6 +29,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -38,7 +44,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.gogoend.intervalclicker.data.CallAction
 import com.gogoend.intervalclicker.data.ClickConfig
@@ -185,21 +194,31 @@ private fun ConfigContent(
 
     val editable = !isRunning
 
-    Stepper(
+    NumberField(
         label = "点击间隔",
-        valueText = "${config.intervalMs} ms",
+        value = config.intervalMs,
+        suffix = "ms",
         enabled = editable,
-        onMinus = { onConfigChange(config.copy(intervalMs = (config.intervalMs - 500).coerceAtLeast(config.minIntervalMs)).normalized()) },
-        onPlus = { onConfigChange(config.copy(intervalMs = (config.intervalMs + 500).coerceAtMost(60_000)).normalized()) },
+        step = 500,
+        min = config.minIntervalMs,
+        max = INTERVAL_MAX_MS,
+        onValueChange = { v ->
+            onConfigChange(config.copy(intervalMs = v.coerceIn(config.minIntervalMs, INTERVAL_MAX_MS)).normalized())
+        },
     )
     Text("最小间隔：${config.minIntervalMs} ms", style = MaterialTheme.typography.bodySmall)
 
-    Stepper(
+    NumberField(
         label = "按下时长",
-        valueText = "${config.pressDurationMs} ms",
+        value = config.pressDurationMs,
+        suffix = "ms",
         enabled = editable,
-        onMinus = { onConfigChange(config.copy(pressDurationMs = (config.pressDurationMs - 10).coerceAtLeast(1)).normalized()) },
-        onPlus = { onConfigChange(config.copy(pressDurationMs = (config.pressDurationMs + 10).coerceAtMost(2000)).normalized()) },
+        step = 10,
+        min = PRESS_MIN_MS,
+        max = PRESS_MAX_MS,
+        onValueChange = { v ->
+            onConfigChange(config.copy(pressDurationMs = v.coerceIn(PRESS_MIN_MS, PRESS_MAX_MS)).normalized())
+        },
     )
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -274,22 +293,69 @@ private fun ConfigContent(
     }
 }
 
+private const val INTERVAL_MAX_MS = 60_000L
+private const val PRESS_MIN_MS = 1L
+private const val PRESS_MAX_MS = 2_000L
+
+/**
+ * 数字输入框 + 加/减按钮。输入与按钮均按 [min,max] 钳制（与 ClickConfig.normalized() 的规则对齐）。
+ * 编辑期间不打断用户输入；在按"完成"或失焦时提交并校验，提交后文案回写为钳制后的值。
+ */
 @Composable
-private fun Stepper(
+private fun NumberField(
     label: String,
-    valueText: String,
+    value: Long,
+    suffix: String,
     enabled: Boolean,
-    onMinus: () -> Unit,
-    onPlus: () -> Unit,
+    step: Long,
+    min: Long,
+    max: Long,
+    onValueChange: (Long) -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Column {
-            Text(label, style = MaterialTheme.typography.titleSmall)
-            Text(valueText, style = MaterialTheme.typography.bodyMedium)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onMinus, enabled = enabled) { Text("−") }
-            OutlinedButton(onClick = onPlus, enabled = enabled) { Text("+") }
+    var text by remember(value) { mutableStateOf(value.toString()) }
+
+    fun commit() {
+        val parsed = text.toLongOrNull()
+        if (parsed != null) onValueChange(parsed.coerceIn(min, max)) else text = value.toString()
+    }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.titleSmall)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            OutlinedButton(
+                onClick = { onValueChange((value - step).coerceIn(min, max)) },
+                enabled = enabled,
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.size(44.dp),
+            ) { Text("−") }
+            OutlinedTextField(
+                value = text,
+                onValueChange = { s -> text = s.filter { it.isDigit() }.take(7) },
+                enabled = enabled,
+                singleLine = true,
+                suffix = { Text(suffix) },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(onDone = { commit() }),
+                modifier = Modifier
+                    .width(132.dp)
+                    .onFocusChanged { if (!it.isFocused) commit() },
+            )
+            OutlinedButton(
+                onClick = { onValueChange((value + step).coerceIn(min, max)) },
+                enabled = enabled,
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.size(44.dp),
+            ) { Text("+") }
         }
     }
 }
