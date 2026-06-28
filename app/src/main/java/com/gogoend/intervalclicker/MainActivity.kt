@@ -469,6 +469,10 @@ private fun AboutContent(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+            Button(
+                onClick = { openUrl(context, "https://qr.alipay.com/fkx15249pnsrs4fgsqjmfed") },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("打开支付宝") }
         }
     }
 }
