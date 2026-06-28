@@ -51,11 +51,11 @@ object PermissionChecker {
         return false
     }
 
+    // 仅检查"已启用服务"列表：被指派到快捷方式/辅助功能按钮 ≠ 服务正在运行，
+    // 那两类目标键不能作为"已授权"依据（否则会出现界面显示可用但服务未连接、显示悬浮窗无效）。
+    // 服务是否真正可用以 serviceReady（实际连接）为准。
     private val ACCESSIBILITY_SETTINGS_KEYS = listOf(
         Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        // 以下两项为隐藏常量，直接用字符串字面量：经"辅助功能快捷方式 / 辅助功能按钮"启用的服务记录于此
-        "accessibility_shortcut_target_service",
-        "accessibility_button_targets",
     )
 
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
