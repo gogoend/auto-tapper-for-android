@@ -252,7 +252,13 @@ private fun ConfigContent(
 
     Spacer(Modifier.height(8.dp))
     Button(onClick = onToggleOverlay, modifier = Modifier.fillMaxWidth()) {
-        Text(if (overlayShown) "隐藏悬浮窗并停止计时" else "显示悬浮窗")
+        Text(
+            when {
+                !overlayShown -> "显示悬浮窗"
+                isRunning -> "隐藏悬浮窗并停止计时"
+                else -> "隐藏悬浮窗"
+            },
+        )
     }
     OutlinedButton(
         onClick = { ClickAccessibilityService.instance?.testTapCenter() },
