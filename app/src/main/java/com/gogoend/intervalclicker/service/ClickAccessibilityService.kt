@@ -36,11 +36,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
-import kotlin.math.max
 
 /**
  * 核心运行时：承载悬浮窗、手势派发与无堆积调度循环。见 contracts/accessibility-service.md。
@@ -100,7 +100,7 @@ class ClickAccessibilityService :
         registerScreenOffReceiver()
         ensureCallMonitoring()
         instance = this
-        serviceReady.value = true
+        _serviceReady.value =true
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* 不需要监听事件 */ }
@@ -145,8 +145,8 @@ class ClickAccessibilityService :
         removeOverlay()
         unregisterScreenOffReceiver()
         stopCallMonitoring()
-        overlayShown.value = false
-        serviceReady.value = false
+        _overlayShown.value =false
+        _serviceReady.value =false
         if (instance === this) instance = null
     }
 
@@ -224,7 +224,7 @@ class ClickAccessibilityService :
             // 停止定时并隐藏悬浮窗（FR-018）：取消协程即取消临近待派发点击
             stopClicking(StopReason.INCOMING_CALL)
             removeOverlay()
-            overlayShown.value = false
+            _overlayShown.value =false
         }
     }
 
@@ -286,7 +286,7 @@ class ClickAccessibilityService :
         positionControl()
         windowManager.addView(cv, cvParams)
 
-        overlayShown.value = true
+        _overlayShown.value =true
     }
 
     /** 准星窗口位置：中心对准 target。 */
@@ -321,7 +321,7 @@ class ClickAccessibilityService :
         val cs = crosshairView ?: return
         if (isRunning.value) return
         ensureCallMonitoring() // 若权限在连接后才授予，这里补注册
-        isRunning.value = true
+        _isRunning.value =true
         cs.setRunning(true)
         clickCount = 0
 
@@ -358,7 +358,7 @@ class ClickAccessibilityService :
         }
         clickJob?.cancel()
         clickJob = null
-        isRunning.value = false
+        _isRunning.value =false
         crosshairView?.setRunning(false)
         crosshairView?.setFraction(0f)
     }
@@ -369,7 +369,7 @@ class ClickAccessibilityService :
      */
     fun testTapCenter() {
         removeOverlay()
-        overlayShown.value = false
+        _overlayShown.value =false
         logger?.enabled = true
         val m = resources.displayMetrics
         val cx = m.widthPixels / 2f
@@ -399,7 +399,7 @@ class ClickAccessibilityService :
     fun hideOverlay() {
         stopClicking(StopReason.EXIT)
         removeOverlay()
-        overlayShown.value = false
+        _overlayShown.value =false
     }
 
     private fun removeOverlay() {
@@ -518,10 +518,17 @@ class ClickAccessibilityService :
         var instance: ClickAccessibilityService? = null
             private set
 
-        val isRunning = MutableStateFlow(false)
-        val overlayShown = MutableStateFlow(false)
-        val serviceReady = MutableStateFlow(false)
+        private val _isRunning = MutableStateFlow(false)
+        private val _overlayShown = MutableStateFlow(false)
+        private val _serviceReady = MutableStateFlow(false)
 
-        val running: StateFlow<Boolean> = isRunning
+        /** 是否正在计时点击。 */
+        val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
+
+        /** 悬浮窗是否显示中。 */
+        val overlayShown: StateFlow<Boolean> = _overlayShown.asStateFlow()
+
+        /** 无障碍服务是否已连接（授权判定权威来源）。 */
+        val serviceReady: StateFlow<Boolean> = _serviceReady.asStateFlow()
     }
 }

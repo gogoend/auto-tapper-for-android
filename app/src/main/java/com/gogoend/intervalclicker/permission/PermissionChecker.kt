@@ -3,7 +3,6 @@ package com.gogoend.intervalclicker.permission
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.TextUtils
@@ -11,11 +10,10 @@ import com.gogoend.intervalclicker.service.ClickAccessibilityService
 
 /**
  * 权限与系统设置状态检查（data-model.md / FR-022 / FR-023）。
- * 必需：悬浮窗 + 无障碍；可选：电池优化豁免。
+ * 必需：无障碍服务（以实际连接 serviceReady 为准）；可选：电池优化豁免。
+ * 悬浮层用 TYPE_ACCESSIBILITY_OVERLAY，无需 SYSTEM_ALERT_WINDOW。
  */
 object PermissionChecker {
-
-    fun canDrawOverlay(context: Context): Boolean = Settings.canDrawOverlays(context)
 
     fun isAccessibilityEnabled(context: Context): Boolean {
         // 最可靠的信号：服务是否已被系统绑定/连接（无论通过开关、"辅助功能快捷方式"或辅助功能按钮启用）。
@@ -70,18 +68,8 @@ object PermissionChecker {
      */
     fun isCoreUsable(context: Context): Boolean = isAccessibilityEnabled(context)
 
-    fun overlaySettingsIntent(context: Context): Intent = Intent(
-        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-        Uri.parse("package:${context.packageName}"),
-    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
     fun accessibilitySettingsIntent(): Intent =
         Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-    fun appDetailsSettingsIntent(context: Context): Intent = Intent(
-        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-        Uri.parse("package:${context.packageName}"),
-    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     fun batteryOptimizationSettingsIntent(): Intent =
         Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)

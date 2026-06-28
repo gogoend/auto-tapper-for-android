@@ -67,7 +67,6 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 data class PermSnapshot(
-    val canOverlay: Boolean,
     val accessibility: Boolean,
     val battery: Boolean,
 )
@@ -75,7 +74,7 @@ data class PermSnapshot(
 class MainActivity : ComponentActivity() {
 
     private val repo by lazy { ConfigRepository(applicationContext) }
-    private var perms by mutableStateOf(PermSnapshot(false, false, false))
+    private var perms by mutableStateOf(PermSnapshot(false, false))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,7 +94,6 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshPerms() {
         perms = PermSnapshot(
-            canOverlay = PermissionChecker.canDrawOverlay(this),
             accessibility = PermissionChecker.isAccessibilityEnabled(this),
             battery = PermissionChecker.isIgnoringBatteryOptimizations(this),
         )

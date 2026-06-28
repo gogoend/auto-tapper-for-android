@@ -20,9 +20,6 @@ data class ClickConfig(
     val minIntervalMs: Long
         get() = max(MIN_INTERVAL_FLOOR_MS, pressDurationMs + PRESS_BUFFER_MS)
 
-    val isValid: Boolean
-        get() = pressDurationMs >= 1L && intervalMs >= minIntervalMs
-
     /** 钳制到合法范围。 */
     fun normalized(): ClickConfig {
         val press = pressDurationMs.coerceAtLeast(1L)
