@@ -105,6 +105,7 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
     val isRunning by ClickAccessibilityService.isRunning.collectAsState()
     val overlayShown by ClickAccessibilityService.overlayShown.collectAsState()
     val serviceReady by ClickAccessibilityService.serviceReady.collectAsState()
+    var showDiagnostics by remember { mutableStateOf(false) }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
         Column(
@@ -115,13 +116,26 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("自动连点器", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                if (showDiagnostics) "诊断与日志" else "自动连点器",
+                style = MaterialTheme.typography.headlineSmall,
+            )
 
             // 服务真正连接（含通过"辅助功能快捷方式"启用）即视为可用，不只看系统设置项
             val accessibilityReady = serviceReady || perms.accessibility
             if (!accessibilityReady) {
                 PermissionGate(
                     onOpenAccessibility = { context.startActivity(PermissionChecker.accessibilitySettingsIntent()) },
+                )
+            } else if (showDiagnostics) {
+                DiagnosticsContent(
+                    config = config,
+                    isRunning = isRunning,
+                    onConfigChange = { updated ->
+                        scope.launch { repo.save(updated) }
+                        ClickAccessibilityService.instance?.updateConfig(updated)
+                    },
+                    onBack = { showDiagnostics = false },
                 )
             } else {
                 ConfigContent(
@@ -148,6 +162,7 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
                     onOpenBattery = {
                         context.startActivity(PermissionChecker.batteryOptimizationSettingsIntent())
                     },
+                    onOpenDiagnostics = { showDiagnostics = true },
                 )
             }
         }
@@ -181,8 +196,8 @@ private fun ConfigContent(
     onToggleOverlay: () -> Unit,
     onStopForEdit: () -> Unit,
     onOpenBattery: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
 ) {
-    val context = LocalContext.current
     var showStopDialog by remember { mutableStateOf(false) }
 
     if (isRunning) {
@@ -244,15 +259,6 @@ private fun ConfigContent(
         ) { Text("切换") }
     }
 
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text("记录点击日志")
-        Switch(
-            checked = config.loggingEnabled,
-            enabled = editable,
-            onCheckedChange = { onConfigChange(config.copy(loggingEnabled = it)) },
-        )
-    }
-
     Spacer(Modifier.height(8.dp))
     Button(onClick = onToggleOverlay, modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -263,19 +269,13 @@ private fun ConfigContent(
             },
         )
     }
-    OutlinedButton(
-        onClick = { ClickAccessibilityService.instance?.testTapCenter() },
-        modifier = Modifier.fillMaxWidth(),
-    ) { Text("诊断：3 秒后点屏幕中心（不显示悬浮窗）") }
-    Text(
-        "排查用：先打开目标 App，回到本页点此按钮，3 秒内切回目标 App，观察屏幕正中是否被点中。",
-        style = MaterialTheme.typography.bodySmall,
-    )
     Text(
         "准星中心圆形按钮开始/停止；控制条拖拽手柄移动落点；X 收起悬浮窗（可在此处重新显示）。",
         style = MaterialTheme.typography.bodySmall,
     )
-    LogSection(context = context, isRunning = isRunning)
+    OutlinedButton(onClick = onOpenDiagnostics, modifier = Modifier.fillMaxWidth()) {
+        Text("诊断与日志")
+    }
 
     if (!batteryOk) {
         Card(Modifier.fillMaxWidth()) {
@@ -299,6 +299,47 @@ private fun ConfigContent(
                 TextButton(onClick = { showStopDialog = false }) { Text("继续运行") }
             },
         )
+    }
+}
+
+@Composable
+private fun DiagnosticsContent(
+    config: ClickConfig,
+    isRunning: Boolean,
+    onConfigChange: (ClickConfig) -> Unit,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+
+    OutlinedButton(onClick = onBack) { Text("← 返回") }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("记录点击日志")
+        Switch(
+            checked = config.loggingEnabled,
+            enabled = !isRunning,
+            onCheckedChange = { onConfigChange(config.copy(loggingEnabled = it)) },
+        )
+    }
+
+    LogSection(context = context, isRunning = isRunning)
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("点击派发自检", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "先打开目标 App，回到本页点下面按钮，3 秒内切回目标 App，观察屏幕正中是否被点中。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = { ClickAccessibilityService.instance?.testTapCenter() },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("诊断：3 秒后点屏幕中心（不显示悬浮窗）") }
+        }
     }
 }
 
