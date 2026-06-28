@@ -1,10 +1,14 @@
 package com.gogoend.intervalclicker
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,6 +56,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -412,6 +418,75 @@ private fun AboutContent(onBack: () -> Unit) {
             )
         }
     }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("链接与联系", style = MaterialTheme.typography.titleMedium)
+            AboutRow("作者 GitHub", "github.com/gogoend", "打开") {
+                openUrl(context, "https://github.com/gogoend")
+            }
+            AboutRow("项目地址", "gogoend/auto-tapper-for-android", "打开") {
+                openUrl(context, "https://github.com/gogoend/auto-tapper-for-android")
+            }
+            AboutRow("微信", "gogoend", "复制") { copyToClipboard(context, "微信号", "gogoend") }
+            AboutRow("小红书", "gogoend", "复制") { copyToClipboard(context, "小红书", "gogoend") }
+            AboutRow("抖音", "gogoend", "复制") { copyToClipboard(context, "抖音", "gogoend") }
+        }
+    }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(16.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("请作者喝杯咖啡（支付宝）", style = MaterialTheme.typography.titleMedium)
+            val qrId = remember {
+                context.resources.getIdentifier("alipay_qr", "drawable", context.packageName)
+            }
+            if (qrId != 0) {
+                Image(
+                    painter = painterResource(qrId),
+                    contentDescription = "支付宝收款码",
+                    modifier = Modifier.size(240.dp),
+                )
+            } else {
+                Text(
+                    "（收款码图片缺失：请将支付宝收款码放入 app/src/main/res/drawable/alipay_qr.png）",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutRow(label: String, value: String, action: String, onAction: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(value, style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(onClick = onAction) { Text(action) }
+    }
+}
+
+private fun openUrl(context: Context, url: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
+
+private fun copyToClipboard(context: Context, label: String, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText(label, text))
+    Toast.makeText(context, "$label 已复制：$text", Toast.LENGTH_SHORT).show()
 }
 
 private const val INTERVAL_MAX_MS = 60_000L
