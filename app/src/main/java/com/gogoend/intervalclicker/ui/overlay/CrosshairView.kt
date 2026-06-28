@@ -38,8 +38,10 @@ class CrosshairView(
 
     private val c get() = sizePx / 2f
     private val circleR = sizePx * 0.40f
+    // 圆形轮廓直径 -12dp（半径 -6dp）
+    private val outlineR = circleR - dp(6f)
     // 开始/停止按钮：在原比例基础上直径 +10dp，且半径不超出圆形轮廓
-    private val buttonR = (circleR * 0.62f + dp(5f)).coerceAtMost(circleR)
+    private val buttonR = (circleR * 0.62f + dp(5f)).coerceAtMost(outlineR)
     private val crossHalf = dp(4f) // 十字总长 8dp
 
     // 外圈：黑白相间实线（白底实线 + 黑色虚线叠加），保证深浅背景下都可见
@@ -87,8 +89,8 @@ class CrosshairView(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         // 圆形轮廓（黑白相间）
-        canvas.drawCircle(c, c, circleR, outlineWhitePaint)
-        canvas.drawCircle(c, c, circleR, outlineBlackPaint)
+        canvas.drawCircle(c, c, outlineR, outlineWhitePaint)
+        canvas.drawCircle(c, c, outlineR, outlineBlackPaint)
         // 中心十字（短）—— 半透明按钮覆盖其上
         canvas.drawLine(c - crossHalf, c, c + crossHalf, c, crossPaint)
         canvas.drawLine(c, c - crossHalf, c, c + crossHalf, crossPaint)
