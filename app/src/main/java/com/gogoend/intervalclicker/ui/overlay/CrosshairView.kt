@@ -42,7 +42,7 @@ class CrosshairView(
     // 开始/停止按钮：在原比例基础上直径 +10dp，且半径不超出圆形轮廓
     private val buttonR = (circleR * 0.62f + dp(5f)).coerceAtMost(outlineR)
     private val crossHalf = dp(4f) // 十字总长 8dp
-    private val tickLen = dp(4f) // 四周短线长度
+    private val tickLen = 10f // 四周短线长度（px），中点与轮廓相交
 
     // 圆形轮廓：白色实线
     private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -98,11 +98,12 @@ class CrosshairView(
         canvas.drawCircle(c, c, outlineR, maskPaint)
         // 白色实线圆形轮廓
         canvas.drawCircle(c, c, outlineR, outlinePaint)
-        // 四周 4 条短线（指向圆心）
-        canvas.drawLine(c, c - outlineR, c, c - outlineR + tickLen, tickPaint)
-        canvas.drawLine(c, c + outlineR, c, c + outlineR - tickLen, tickPaint)
-        canvas.drawLine(c - outlineR, c, c - outlineR + tickLen, c, tickPaint)
-        canvas.drawLine(c + outlineR, c, c + outlineR - tickLen, c, tickPaint)
+        // 四周 4 条短线（径向，中点与圆形轮廓相交）
+        val tHalf = tickLen / 2f
+        canvas.drawLine(c, c - outlineR - tHalf, c, c - outlineR + tHalf, tickPaint)
+        canvas.drawLine(c, c + outlineR - tHalf, c, c + outlineR + tHalf, tickPaint)
+        canvas.drawLine(c - outlineR - tHalf, c, c - outlineR + tHalf, c, tickPaint)
+        canvas.drawLine(c + outlineR - tHalf, c, c + outlineR + tHalf, c, tickPaint)
         // 中心十字（短）—— 半透明按钮覆盖其上
         canvas.drawLine(c - crossHalf, c, c + crossHalf, c, crossPaint)
         canvas.drawLine(c, c - crossHalf, c, c + crossHalf, crossPaint)
