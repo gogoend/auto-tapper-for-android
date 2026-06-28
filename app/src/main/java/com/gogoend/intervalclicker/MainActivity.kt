@@ -104,6 +104,7 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
     val config by repo.configFlow.collectAsState(initial = ClickConfig())
     val isRunning by ClickAccessibilityService.isRunning.collectAsState()
     val overlayShown by ClickAccessibilityService.overlayShown.collectAsState()
+    val serviceReady by ClickAccessibilityService.serviceReady.collectAsState()
 
     Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
         Column(
@@ -116,7 +117,9 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
         ) {
             Text("自动连点器", style = MaterialTheme.typography.headlineSmall)
 
-            if (!perms.accessibility) {
+            // 服务真正连接（含通过"辅助功能快捷方式"启用）即视为可用，不只看系统设置项
+            val accessibilityReady = serviceReady || perms.accessibility
+            if (!accessibilityReady) {
                 PermissionGate(
                     onOpenAccessibility = { context.startActivity(PermissionChecker.accessibilitySettingsIntent()) },
                 )

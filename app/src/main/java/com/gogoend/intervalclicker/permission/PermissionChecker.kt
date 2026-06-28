@@ -18,7 +18,13 @@ object PermissionChecker {
     fun canDrawOverlay(context: Context): Boolean = Settings.canDrawOverlays(context)
 
     fun isAccessibilityEnabled(context: Context): Boolean {
-        val expected = ComponentName(context, ClickAccessibilityService::class.java).flattenToString()
+        // 最可靠的信号：服务是否已被系统绑定/连接（无论通过开关还是"辅助功能快捷方式"启用）。
+        if (ClickAccessibilityService.serviceReady.value) return true
+
+        // 退路：读取系统设置项并按长/短两种组件名格式匹配（避免格式不一致导致误判）。
+        val component = ComponentName(context, ClickAccessibilityService::class.java)
+        val expectedFull = component.flattenToString()
+        val expectedShort = component.flattenToShortString()
         val enabled = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
@@ -26,7 +32,12 @@ object PermissionChecker {
         val splitter = TextUtils.SimpleStringSplitter(':')
         splitter.setString(enabled)
         while (splitter.hasNext()) {
-            if (splitter.next().equals(expected, ignoreCase = true)) return true
+            val entry = splitter.next()
+            if (entry.equals(expectedFull, ignoreCase = true) ||
+                entry.equals(expectedShort, ignoreCase = true)
+            ) {
+                return true
+            }
         }
         return false
     }
