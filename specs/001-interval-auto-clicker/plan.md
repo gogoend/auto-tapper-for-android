@@ -20,7 +20,7 @@
 
 **Target Platform**: Android（minSdk 26 / targetSdk 36，**compileSdk 37** —— 既有依赖 core-ktx 1.19.0 等要求 37）
 
-**Project Type**: 单模块 Android 应用（`:app`），package `com.gogoend.intervalclicker`
+**Project Type**: 单模块 Android 应用（`:app`），package `com.gogoend.intervaltapper`
 
 **Performance Goals**: 间隔精度 ±5%（SC-001）；倒计时动画与界面流畅、无延迟累积导致的批量齐发（SC-002/FR-013）；点击触达成功率 ≥99%（SC-006）
 
@@ -61,12 +61,12 @@ specs/001-interval-auto-clicker/
 
 ### Source Code (repository root)
 
-沿用现有单模块结构 `app/`，在 `com.gogoend.intervalclicker` 下按职责分包：
+沿用现有单模块结构 `app/`，在 `com.gogoend.intervaltapper` 下按职责分包：
 
-实际落地结构（单模块 `app/`，package `com.gogoend.intervalclicker`）：
+实际落地结构（单模块 `app/`，package `com.gogoend.intervaltapper`）：
 
 ```text
-app/src/main/java/com/gogoend/intervalclicker/
+app/src/main/java/com/gogoend/intervaltapper/
 ├── MainActivity.kt                  # 配置页 + 权限引导 + 诊断与日志页（Compose，全部在此）
 ├── ui/
 │   ├── theme/                       # 既有主题
@@ -92,7 +92,7 @@ app/src/main/java/com/gogoend/intervalclicker/
 app/src/main/AndroidManifest.xml     # 声明 AccessibilityService、READ_PHONE_STATE、FileProvider（SYSTEM_ALERT_WINDOW 已声明但非必需）
 app/src/main/res/xml/                # accessibility_service_config.xml、file_paths.xml
 
-app/src/test/java/com/gogoend/intervalclicker/      # JUnit4：ClickScheduler、CountdownModel、OverlayLayout
+app/src/test/java/com/gogoend/intervaltapper/      # JUnit4：ClickScheduler、CountdownModel、OverlayLayout
 ```
 
 **Structure Decision**: 单模块 Android 应用。核心可测逻辑（`scheduler/`、`ui/overlay/OverlayLayout`、`data/` 校验）与 Android 框架解耦，可在纯 JVM 单元测试验证；无障碍服务作为唯一长生命周期组件承载悬浮窗、手势派发与（规划中的）中断监听。

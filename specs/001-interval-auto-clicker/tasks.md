@@ -18,7 +18,7 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 - **[P]**: 可并行（不同文件、无未完成依赖）
 - **[Story]**: 所属用户故事（US1–US5）
-- 包名根 `com.gogoend.intervalclicker`，源码根 `app/src/main/java/com/gogoend/intervalclicker/`，单测根 `app/src/test/java/com/gogoend/intervalclicker/`
+- 包名根 `com.gogoend.intervaltapper`，源码根 `app/src/main/java/com/gogoend/intervaltapper/`，单测根 `app/src/test/java/com/gogoend/intervaltapper/`
 
 ---
 
@@ -28,7 +28,7 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 - [X] T001 在 `gradle/libs.versions.toml` 添加 kotlinx-coroutines-android 与 androidx.datastore:datastore-preferences 的 version/library 条目
 - [X] T002 在 `app/build.gradle.kts` 的 dependencies 中引入 T001 的 coroutines 与 datastore 工件
-- [X] T003 [P] 创建包目录骨架：`service/`、`scheduler/`、`data/`、`permission/`、`ui/config/`、`ui/onboarding/`、`ui/overlay/`（在 `app/src/main/java/com/gogoend/intervalclicker/` 下）
+- [X] T003 [P] 创建包目录骨架：`service/`、`scheduler/`、`data/`、`permission/`、`ui/config/`、`ui/onboarding/`、`ui/overlay/`（在 `app/src/main/java/com/gogoend/intervaltapper/` 下）
 
 ---
 
@@ -58,7 +58,7 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 ### Tests for User Story 1
 
-- [X] T011 [P] [US1] 单元测试 `ClickScheduler`：fireImmediately、`delayUntilNext`、**无堆积**（错过多周期后基于 now 重设而非补发，FR-013）在 `app/src/test/java/com/gogoend/intervalclicker/ClickSchedulerTest.kt`
+- [X] T011 [P] [US1] 单元测试 `ClickScheduler`：fireImmediately、`delayUntilNext`、**无堆积**（错过多周期后基于 now 重设而非补发，FR-013）在 `app/src/test/java/com/gogoend/intervaltapper/ClickSchedulerTest.kt`
 
 ### Implementation for User Story 1
 
@@ -98,7 +98,7 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 ### Tests for User Story 2
 
-- [X] T022 [P] [US2] 单元测试 `arrangeControls`：四边/四角输入下各控件包围盒落在屏幕可见区内（FR-014/SC-004）在 `app/src/test/java/com/gogoend/intervalclicker/OverlayLayoutTest.kt`
+- [X] T022 [P] [US2] 单元测试 `arrangeControls`：四边/四角输入下各控件包围盒落在屏幕可见区内（FR-014/SC-004）在 `app/src/test/java/com/gogoend/intervaltapper/OverlayLayoutTest.kt`
 
 ### Implementation for User Story 2
 
@@ -135,7 +135,7 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 ### Tests for User Story 3
 
-- [X] T030 [P] [US3] 单元测试 `CountdownModel.remainingFraction`：满间隔≈1.0、临近≈0.0、钳制 [0,1]（SC-005）在 `app/src/test/java/com/gogoend/intervalclicker/CountdownModelTest.kt`
+- [X] T030 [P] [US3] 单元测试 `CountdownModel.remainingFraction`：满间隔≈1.0、临近≈0.0、钳制 [0,1]（SC-005）在 `app/src/test/java/com/gogoend/intervaltapper/CountdownModelTest.kt`
 
 ### Implementation for User Story 3
 
@@ -152,7 +152,7 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 **Purpose**: 跨故事完善
 
 - [X] T034 [P] 填写无障碍服务用途说明字符串、应用图标与文案于 `app/src/main/res/values/strings.xml` 及相关资源
-- [X] T035 [P] 补充边缘 insets 单测（状态栏/导航栏/刘海区域下 `arrangeControls` 行为）在 `app/src/test/java/com/gogoend/intervalclicker/OverlayLayoutTest.kt`
+- [X] T035 [P] 补充边缘 insets 单测（状态栏/导航栏/刘海区域下 `arrangeControls` 行为）在 `app/src/test/java/com/gogoend/intervaltapper/OverlayLayoutTest.kt`
 - [~] T036 间隔精度验证（SC-001）。**逻辑层已覆盖**：`ClickSchedulerTest.steadyStateIntervalWithinFivePercent` 模拟调度循环验证稳态间隔 ±5% 且无漂移。**待办（真机）**：设 5s 跑 10 分钟，用诊断日志比对相邻 CLICK 时间戳。
 - [X] T037 代码清理与重构（统一 service 与 UI 的状态流、移除样板）跨 `service/`、`ui/`
 - [~] T038 手动验收。**已就绪**：quickstart.md「验收对照（T038）」清单已按当前实现刷新，可逐项勾选。**待办（真机）**：实际跑一遍并勾选。

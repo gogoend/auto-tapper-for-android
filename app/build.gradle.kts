@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.gogoend.intervalclicker"
+    namespace = "com.gogoend.intervaltapper"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.gogoend.intervalclicker"
+        applicationId = "com.gogoend.intervaltapper"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
