@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.gogoend.intervaltapper"
+    namespace = "com.gogoend.autotapper"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.gogoend.intervaltapper"
+        applicationId = "com.gogoend.autotapper"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

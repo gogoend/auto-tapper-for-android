@@ -1,0 +1,740 @@
+package com.gogoend.autotapper
+
+import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import com.gogoend.autotapper.data.CallAction
+import com.gogoend.autotapper.data.ClickConfig
+import com.gogoend.autotapper.data.ConfigRepository
+import com.gogoend.autotapper.logging.ClickLogger
+import com.gogoend.autotapper.permission.PermissionChecker
+import com.gogoend.autotapper.scheduler.StopReason
+import com.gogoend.autotapper.service.ClickAccessibilityService
+import com.gogoend.autotapper.ui.theme.AutoTapperTheme
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.launch
+import java.io.File
+
+data class PermSnapshot(
+    val accessibility: Boolean,
+    val battery: Boolean,
+)
+
+class MainActivity : ComponentActivity() {
+
+    private val repo by lazy { ConfigRepository(applicationContext) }
+    private var perms by mutableStateOf(PermSnapshot(false, false))
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        refreshPerms()
+        setContent {
+            AutoTapperTheme {
+                AppRoot(repo = repo, perms = perms)
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshPerms()
+    }
+
+    private fun refreshPerms() {
+        perms = PermSnapshot(
+            accessibility = PermissionChecker.isAccessibilityEnabled(this),
+            battery = PermissionChecker.isIgnoringBatteryOptimizations(this),
+        )
+    }
+}
+
+@Composable
+private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val config by repo.configFlow.collectAsState(initial = ClickConfig())
+    val isRunning by ClickAccessibilityService.isRunning.collectAsState()
+    val overlayShown by ClickAccessibilityService.overlayShown.collectAsState()
+    val serviceReady by ClickAccessibilityService.serviceReady.collectAsState()
+    var showDiagnostics by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
+
+    var phoneStateGranted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val phonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        phoneStateGranted = granted
+        if (granted) ClickAccessibilityService.instance?.ensureCallMonitoring()
+    }
+
+    Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(inner)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                when {
+                    showDiagnostics -> "诊断与日志"
+                    showAbout -> "关于"
+                    else -> "自动连点器"
+                },
+                style = MaterialTheme.typography.headlineSmall,
+            )
+
+            // 服务真正连接（含通过"辅助功能快捷方式"启用）即视为可用，不只看系统设置项
+            val accessibilityReady = serviceReady || perms.accessibility
+            if (!accessibilityReady) {
+                PermissionGate(
+                    onOpenAccessibility = { context.startActivity(PermissionChecker.accessibilitySettingsIntent()) },
+                )
+            } else if (showDiagnostics) {
+                DiagnosticsContent(
+                    config = config,
+                    isRunning = isRunning,
+                    onConfigChange = { updated ->
+                        scope.launch { repo.save(updated) }
+                        ClickAccessibilityService.instance?.updateConfig(updated)
+                    },
+                    onBack = { showDiagnostics = false },
+                )
+            } else if (showAbout) {
+                AboutContent(onBack = { showAbout = false })
+            } else {
+                ConfigContent(
+                    config = config,
+                    isRunning = isRunning,
+                    overlayShown = overlayShown,
+                    batteryOk = perms.battery,
+                    phoneStateGranted = phoneStateGranted,
+                    onRequestPhonePermission = {
+                        phonePermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE)
+                    },
+                    onConfigChange = { updated ->
+                        scope.launch { repo.save(updated) }
+                        ClickAccessibilityService.instance?.updateConfig(updated)
+                    },
+                    onToggleOverlay = {
+                        val svc = ClickAccessibilityService.instance
+                        if (overlayShown) {
+                            svc?.hideOverlay()
+                        } else {
+                            scope.launch { repo.save(config) }
+                            svc?.showOverlay(config)
+                        }
+                    },
+                    onStopForEdit = {
+                        ClickAccessibilityService.instance?.stopClicking(StopReason.USER)
+                    },
+                    onOpenBattery = {
+                        context.startActivity(PermissionChecker.batteryOptimizationSettingsIntent())
+                    },
+                    onOpenBackground = {
+                        context.startActivity(PermissionChecker.appDetailsSettingsIntent(context))
+                    },
+                    onOpenDiagnostics = { showDiagnostics = true },
+                    onOpenAbout = { showAbout = true },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionGate(
+    onOpenAccessibility: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("需要授权后才能使用", style = MaterialTheme.typography.titleMedium)
+            Text("必须开启本应用的无障碍服务，才能执行自动点击：")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("✗ 无障碍服务")
+                Button(onClick = onOpenAccessibility) { Text("去开启") }
+            }
+            Text("开启后返回本页面即可继续。悬浮层由无障碍服务绘制，无需单独的悬浮窗权限。", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun ConfigContent(
+    config: ClickConfig,
+    isRunning: Boolean,
+    overlayShown: Boolean,
+    batteryOk: Boolean,
+    phoneStateGranted: Boolean,
+    onRequestPhonePermission: () -> Unit,
+    onConfigChange: (ClickConfig) -> Unit,
+    onToggleOverlay: () -> Unit,
+    onStopForEdit: () -> Unit,
+    onOpenBattery: () -> Unit,
+    onOpenBackground: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
+    onOpenAbout: () -> Unit,
+) {
+    var showStopDialog by remember { mutableStateOf(false) }
+
+    if (isRunning) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("定时点击进行中", style = MaterialTheme.typography.titleMedium)
+                Text("运行期间不可修改配置。")
+                Button(onClick = { showStopDialog = true }) { Text("修改配置（需先停止）") }
+            }
+        }
+    }
+
+    val editable = !isRunning
+
+    NumberField(
+        label = "点击间隔",
+        value = config.intervalMs,
+        suffix = "ms",
+        enabled = editable,
+        step = 500,
+        min = config.minIntervalMs,
+        max = INTERVAL_MAX_MS,
+        onValueChange = { v ->
+            onConfigChange(config.copy(intervalMs = v.coerceIn(config.minIntervalMs, INTERVAL_MAX_MS)).normalized())
+        },
+    )
+    Text("最小间隔：${config.minIntervalMs} ms", style = MaterialTheme.typography.bodySmall)
+
+    NumberField(
+        label = "按下时长",
+        value = config.pressDurationMs,
+        suffix = "ms",
+        enabled = editable,
+        step = 10,
+        min = PRESS_MIN_MS,
+        max = PRESS_MAX_MS,
+        onValueChange = { v ->
+            onConfigChange(config.copy(pressDurationMs = v.coerceIn(PRESS_MIN_MS, PRESS_MAX_MS)).normalized())
+        },
+    )
+
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text("开启后立即点击一次")
+        Switch(
+            checked = config.fireImmediately,
+            enabled = editable,
+            onCheckedChange = { onConfigChange(config.copy(fireImmediately = it)) },
+        )
+    }
+
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text("来电时：${if (config.onIncomingCall == CallAction.STOP) "停止定时" else "继续运行"}")
+        OutlinedButton(
+            enabled = editable,
+            onClick = {
+                val next = if (config.onIncomingCall == CallAction.STOP) CallAction.CONTINUE else CallAction.STOP
+                onConfigChange(config.copy(onIncomingCall = next))
+                if (next == CallAction.STOP && !phoneStateGranted) onRequestPhonePermission()
+            },
+        ) { Text("切换") }
+    }
+    if (config.onIncomingCall == CallAction.STOP && !phoneStateGranted) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "需要电话状态权限才能在来电时停止；未授予则来电不会自动停止。",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(enabled = editable, onClick = onRequestPhonePermission) { Text("授权") }
+        }
+    }
+
+    Spacer(Modifier.height(8.dp))
+    Button(onClick = onToggleOverlay, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            when {
+                !overlayShown -> "显示悬浮窗"
+                isRunning -> "隐藏悬浮窗并停止计时"
+                else -> "隐藏悬浮窗"
+            },
+        )
+    }
+    Text(
+        "准星中心圆形按钮开始/停止；控制条拖拽手柄移动落点；X 收起悬浮窗（可在此处重新显示）。",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    OutlinedButton(onClick = onOpenDiagnostics, modifier = Modifier.fillMaxWidth()) {
+        Text("诊断与日志")
+    }
+    OutlinedButton(onClick = onOpenAbout, modifier = Modifier.fillMaxWidth()) {
+        Text("关于")
+    }
+
+    // 后台存活相关（可选）：拆为两个独立入口
+    if (!batteryOk) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("关闭省电限制（电池优化）", style = MaterialTheme.typography.titleSmall)
+                Text("可选。将本应用加入电池优化白名单，降低长时间运行被系统回收的概率。", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = onOpenBattery) { Text("去设置") }
+            }
+        }
+    }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("允许后台运行 / 自启动", style = MaterialTheme.typography.titleSmall)
+            Text("可选，且为厂商私有设置（无法自动检测）。在应用详情/电池里把本应用设为「无限制 / 允许后台 / 自启动」，可提升长时间存活率。", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = onOpenBackground) { Text("打开应用设置") }
+        }
+    }
+
+    if (showStopDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopDialog = false },
+            title = { Text("停止定时？") },
+            text = { Text("修改配置需要先停止当前定时点击。是否停止？") },
+            confirmButton = {
+                TextButton(onClick = { onStopForEdit(); showStopDialog = false }) { Text("停止并修改") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStopDialog = false }) { Text("继续运行") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun DiagnosticsContent(
+    config: ClickConfig,
+    isRunning: Boolean,
+    onConfigChange: (ClickConfig) -> Unit,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+
+    OutlinedButton(onClick = onBack) { Text("← 返回") }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("记录点击日志")
+        Switch(
+            checked = config.loggingEnabled,
+            enabled = !isRunning,
+            onCheckedChange = { onConfigChange(config.copy(loggingEnabled = it)) },
+        )
+    }
+
+    LogSection(context = context, isRunning = isRunning)
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("点击派发自检", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "先打开目标 App，回到本页点下面按钮，3 秒内切回目标 App，观察屏幕正中是否被点中。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = { ClickAccessibilityService.instance?.testTapCenter() },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("诊断：3 秒后点屏幕中心（不显示悬浮窗）") }
+        }
+    }
+}
+
+@Composable
+private fun AboutContent(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val version = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull().orEmpty()
+    }
+
+    OutlinedButton(onClick = onBack) { Text("← 返回") }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("自动连点器", style = MaterialTheme.typography.titleLarge)
+            if (version.isNotEmpty()) {
+                Text("版本 $version", style = MaterialTheme.typography.bodyMedium)
+            }
+            Text("作者：gogoend", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "© gogoend. 版权所有，保留所有权利。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+
+    // 组 1：项目
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("项目", style = MaterialTheme.typography.titleMedium)
+            AboutRow("项目地址", "gogoend/auto-tapper-for-android", "打开") {
+                openUrl(context, "https://github.com/gogoend/auto-tapper-for-android")
+            }
+            AboutRow("反馈问题", "提交 Issue", "打开") {
+                openUrl(context, "https://github.com/gogoend/auto-tapper-for-android/issues")
+            }
+        }
+    }
+
+    // 组 2：与作者联系
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("与作者联系", style = MaterialTheme.typography.titleMedium)
+            AboutRow("GitHub", "github.com/gogoend", "打开") {
+                openUrl(context, "https://github.com/gogoend")
+            }
+            AboutRow("微信", "gogoend", "复制") { copyToClipboard(context, "微信号", "gogoend") }
+            AboutRow("小红书", "gogoend", "复制") { copyToClipboard(context, "小红书", "gogoend") }
+            AboutRow("抖音", "gogoend", "复制") { copyToClipboard(context, "抖音", "gogoend") }
+        }
+    }
+
+    // 组 3：请作者喝咖啡
+    Card(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(16.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("请作者喝咖啡", style = MaterialTheme.typography.titleMedium)
+            val qrId = remember {
+                context.resources.getIdentifier("alipay_qr", "drawable", context.packageName)
+            }
+            if (qrId != 0) {
+                Image(
+                    painter = painterResource(qrId),
+                    contentDescription = "支付宝收款码",
+                    modifier = Modifier.size(240.dp),
+                )
+                Text("支付宝扫一扫", style = MaterialTheme.typography.bodySmall)
+            } else {
+                Text(
+                    "（收款码图片缺失：请将支付宝收款码放入 app/src/main/res/drawable/alipay_qr.png）",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            DonatePulseButton(text = "打开支付宝，直接转账") {
+                openUrl(context, "https://qr.alipay.com/fkx15249pnsrs4fgsqjmfed")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DonatePulseButton(text: String, onClick: () -> Unit) {
+    val transition = rememberInfiniteTransition(label = "donate")
+    val ripple by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing), RepeatMode.Restart),
+        label = "ripple",
+    )
+    val shimmer by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart),
+        label = "shimmer",
+    )
+    val accent = MaterialTheme.colorScheme.primary
+    val onAccent = MaterialTheme.colorScheme.onPrimary
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 涟漪：从按钮外边缘向外扩散若干 dp 后淡出，循环（drawBehind 在 padding 之前，可绘制到留白区）
+            .drawBehind {
+                val pad = 10.dp.toPx()
+                val left = pad
+                val top = pad
+                val w = size.width - pad * 2
+                val h = size.height - pad * 2
+                val expand = ripple * pad
+                val alpha = (1f - ripple).coerceIn(0f, 1f)
+                drawRoundRect(
+                    color = accent.copy(alpha = alpha * 0.7f),
+                    topLeft = Offset(left - expand, top - expand),
+                    size = Size(w + expand * 2, h + expand * 2),
+                    cornerRadius = CornerRadius(h / 2f + expand),
+                    style = Stroke(width = 2.dp.toPx()),
+                )
+            }
+            .padding(10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clip(RoundedCornerShape(50))
+                .background(accent)
+                .clickable { onClick() }
+                // 扫光背景：一条斜向半透明白带横扫
+                .drawWithContent {
+                    drawContent()
+                    val band = size.width * 0.35f
+                    val xStart = -band + shimmer * (size.width + band)
+                    drawRect(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.35f),
+                                Color.Transparent,
+                            ),
+                            start = Offset(xStart, 0f),
+                            end = Offset(xStart + band, size.height),
+                        ),
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text, color = onAccent, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun AboutRow(label: String, value: String, action: String, onAction: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(value, style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(onClick = onAction) { Text(action) }
+    }
+}
+
+private fun openUrl(context: Context, url: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
+
+private fun copyToClipboard(context: Context, label: String, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText(label, text))
+    Toast.makeText(context, "$label 已复制：$text", Toast.LENGTH_SHORT).show()
+}
+
+private const val INTERVAL_MAX_MS = 60_000L
+private const val PRESS_MIN_MS = 1L
+private const val PRESS_MAX_MS = 2_000L
+
+/**
+ * 数字输入框 + 加/减按钮。输入与按钮均按 [min,max] 钳制（与 ClickConfig.normalized() 的规则对齐）。
+ * 编辑期间不打断用户输入；在按"完成"或失焦时提交并校验，提交后文案回写为钳制后的值。
+ */
+@Composable
+private fun NumberField(
+    label: String,
+    value: Long,
+    suffix: String,
+    enabled: Boolean,
+    step: Long,
+    min: Long,
+    max: Long,
+    onValueChange: (Long) -> Unit,
+) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+
+    fun commit() {
+        val parsed = text.toLongOrNull()
+        if (parsed != null) onValueChange(parsed.coerceIn(min, max)) else text = value.toString()
+    }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.titleSmall)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            OutlinedButton(
+                onClick = { onValueChange((value - step).coerceIn(min, max)) },
+                enabled = enabled,
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.size(44.dp),
+            ) { Text("−") }
+            OutlinedTextField(
+                value = text,
+                onValueChange = { s -> text = s.filter { it.isDigit() }.take(7) },
+                enabled = enabled,
+                singleLine = true,
+                suffix = { Text(suffix) },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(onDone = { commit() }),
+                modifier = Modifier
+                    .width(132.dp)
+                    .onFocusChanged { if (!it.isFocused) commit() },
+            )
+            OutlinedButton(
+                onClick = { onValueChange((value + step).coerceIn(min, max)) },
+                enabled = enabled,
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.size(44.dp),
+            ) { Text("+") }
+        }
+    }
+}
+
+@Composable
+private fun LogSection(context: Context, isRunning: Boolean) {
+    var refresh by remember { mutableIntStateOf(0) }
+    // isRunning 变化（会话开始/结束）或手动刷新时重新枚举日志文件
+    val files = remember(refresh, isRunning) { ClickLogger.listLogFiles(context) }
+    var selected by remember(files) { mutableStateOf(files.firstOrNull()) }
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("点击日志", style = MaterialTheme.typography.titleSmall)
+                OutlinedButton(onClick = { refresh++ }) { Text("刷新") }
+            }
+            Text("目录：${ClickLogger.logsDir(context).absolutePath}", style = MaterialTheme.typography.bodySmall)
+
+            if (files.isEmpty()) {
+                Text("暂无日志文件", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Box {
+                    OutlinedButton(onClick = { expanded = true }) {
+                        Text(selected?.name ?: "选择日志文件")
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        files.forEach { f ->
+                            DropdownMenuItem(
+                                text = { Text(f.name) },
+                                onClick = { selected = f; expanded = false },
+                            )
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        enabled = selected != null,
+                        onClick = { selected?.let { shareLog(context, it) } },
+                    ) { Text("分享/查看") }
+                    OutlinedButton(
+                        enabled = selected != null,
+                        onClick = { selected?.let { it.delete(); refresh++ } },
+                    ) { Text("删除") }
+                }
+                OutlinedButton(onClick = {
+                    files.forEach { it.delete() }
+                    refresh++
+                }) { Text("清空全部日志") }
+            }
+        }
+    }
+}
+
+private fun shareLog(context: Context, file: File) {
+    runCatching {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(
+            Intent.createChooser(intent, "分享/查看日志").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
