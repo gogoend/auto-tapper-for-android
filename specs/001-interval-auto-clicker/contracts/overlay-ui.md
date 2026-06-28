@@ -20,8 +20,8 @@
 
 ## 屏幕边缘自适应（FR-014 / SC-004）
 
-- 控制条窗默认置于准星下方一段距离；下方放不下则置于上方；并夹取到屏幕内，保证完整可见可点、且不覆盖落点。
-- 纯布局函数 `arrangeControls(center, screenSize, satelliteRadius, offset): ControlLayout` 可单测（已用于校验各控件包围盒落在屏幕内）。
+- 控制条窗放在准星上/下方**可用空间更大**的一侧；夹取到安全区内（支持上/下 inset），保证完整可见可点、且不与落点竖直重叠。
+- 纯布局函数 `placeControlBar(target, crosshairSize, controlW/H, screenW/H, gap, topInset, bottomInset): LPoint` 可单测（已覆盖四角/四边/中心与 inset）。
 
 ## 运行中改配置（FR-026）
 

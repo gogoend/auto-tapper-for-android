@@ -28,6 +28,7 @@ import com.gogoend.intervalclicker.scheduler.ClickScheduler
 import com.gogoend.intervalclicker.scheduler.StopReason
 import com.gogoend.intervalclicker.ui.overlay.ControlBarView
 import com.gogoend.intervalclicker.ui.overlay.CrosshairView
+import com.gogoend.intervalclicker.ui.overlay.placeControlBar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -298,17 +299,21 @@ class ClickAccessibilityService :
         }
     }
 
-    /** 控制条位置：默认放在准星下方一段距离；下方放不下则放上方；并夹取到屏幕内。不覆盖 target。 */
+    /** 控制条位置：取可用空间更大的一侧（准星上/下方），夹取到屏幕内，不覆盖落点（见 placeControlBar / FR-014）。 */
     private fun positionControl() {
         val params = controlParams ?: return
-        val belowY = (target.y + csSize / 2f + csSize * 0.12f).toInt()
-        val aboveY = (target.y - csSize / 2f - csSize * 0.12f - controlH).toInt()
-        var top = if (belowY + controlH <= screenH) belowY else aboveY
-        var left = (target.x - controlW / 2f).toInt()
-        left = left.coerceIn(0, max(0, screenW - controlW))
-        top = top.coerceIn(0, max(0, screenH - controlH))
-        params.x = left
-        params.y = top
+        val p = placeControlBar(
+            targetX = target.x,
+            targetY = target.y,
+            crosshairSize = csSize,
+            controlW = controlW,
+            controlH = controlH,
+            screenW = screenW,
+            screenH = screenH,
+            gap = csSize * 0.12f,
+        )
+        params.x = p.x.toInt()
+        params.y = p.y.toInt()
         controlView?.let { runCatching { windowManager.updateViewLayout(it, params) } }
     }
 

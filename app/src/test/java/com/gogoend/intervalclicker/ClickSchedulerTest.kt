@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 class ClickSchedulerTest {
 
@@ -47,6 +48,36 @@ class ClickSchedulerTest {
         fakeNow = 5000L
         assertEquals(0L, scheduler.delayUntilNext(4000L))
         assertEquals(1000L, scheduler.delayUntilNext(6000L))
+    }
+
+    /** SC-001 / T036（逻辑层）：模拟调度循环（16ms tick + 每次执行有少量开销），
+     *  稳态下相邻点击间隔与设定值偏差应 ≤ ±5%，且不随次数累积漂移。 */
+    @Test
+    fun steadyStateIntervalWithinFivePercent() {
+        val interval = 5000L
+        var now = 0L
+        val sched = ClickScheduler { now }
+        var next = sched.start(interval, fireImmediately = false).nextFireElapsed
+
+        val fireTimes = mutableListOf<Long>()
+        var guard = 0
+        while (fireTimes.size < 30 && guard < 10_000_000) {
+            guard++
+            if (now >= next) {
+                fireTimes.add(now)
+                now += 7 // 模拟一次点击的执行开销
+                next = sched.onClickCompleted(interval)
+            } else {
+                now += 16 // 帧 tick
+            }
+        }
+
+        assertTrue("应至少触发若干次", fireTimes.size >= 10)
+        for (i in 1 until fireTimes.size) {
+            val d = fireTimes[i] - fireTimes[i - 1]
+            val err = abs(d - interval).toDouble() / interval
+            assertTrue("第 $i 次间隔 $d ms 偏差 ${"%.3f".format(err)} 超过 5%", err <= 0.05)
+        }
     }
 
     @Test

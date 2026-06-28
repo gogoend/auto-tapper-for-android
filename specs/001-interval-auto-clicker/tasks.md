@@ -104,7 +104,7 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 - [X] T023 [P] [US2] 实现纯布局函数 `arrangeControls(center, screenSize, insets): ControlLayout`（边缘自适应）在 `ui/overlay/OverlayLayout.kt`（contracts/overlay-ui.md）
 - [X] T024 [US2] 实现拖拽手柄 Composable，拖动更新整个悬浮层位置并实时 `updateTarget(x,y)`（FR-006）在 `ui/overlay/DragHandle.kt` 与 `service/ClickAccessibilityService.kt`（依赖 T009, T017）
-- [ ] T025 [US2] 在悬浮层布局中应用 `arrangeControls`（拖到边缘重排控件）在 `ui/overlay/OverlayControls.kt`（依赖 T023, T024）
+- [X] T025 [US2] 在悬浮层布局中应用 `arrangeControls`（拖到边缘重排控件）在 `ui/overlay/OverlayControls.kt`（依赖 T023, T024）
 
 **Checkpoint**: US1 + US2 各自可独立工作
 
@@ -152,10 +152,10 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 **Purpose**: 跨故事完善
 
 - [X] T034 [P] 填写无障碍服务用途说明字符串、应用图标与文案于 `app/src/main/res/values/strings.xml` 及相关资源
-- [ ] T035 [P] 补充边缘 insets 单测（状态栏/导航栏/刘海区域下 `arrangeControls` 行为）在 `app/src/test/java/com/gogoend/intervalclicker/OverlayLayoutTest.kt`
-- [ ] T036 间隔精度验证：设 5s 跑 10 分钟记录时间戳，核对 ±5%（SC-001）并据此校准调度补偿，记录于 quickstart 验收
+- [X] T035 [P] 补充边缘 insets 单测（状态栏/导航栏/刘海区域下 `arrangeControls` 行为）在 `app/src/test/java/com/gogoend/intervalclicker/OverlayLayoutTest.kt`
+- [~] T036 间隔精度验证（SC-001）。**逻辑层已覆盖**：`ClickSchedulerTest.steadyStateIntervalWithinFivePercent` 模拟调度循环验证稳态间隔 ±5% 且无漂移。**待办（真机）**：设 5s 跑 10 分钟，用诊断日志比对相邻 CLICK 时间戳。
 - [ ] T037 代码清理与重构（统一 service 与 UI 的状态流、移除样板）跨 `service/`、`ui/`
-- [ ] T038 执行 `quickstart.md` 全流程手动验收并勾选验收对照表
+- [~] T038 手动验收。**已就绪**：quickstart.md「验收对照（T038）」清单已按当前实现刷新，可逐项勾选。**待办（真机）**：实际跑一遍并勾选。
 
 ---
 
