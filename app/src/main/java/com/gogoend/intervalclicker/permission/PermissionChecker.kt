@@ -18,19 +18,28 @@ object PermissionChecker {
     fun canDrawOverlay(context: Context): Boolean = Settings.canDrawOverlays(context)
 
     fun isAccessibilityEnabled(context: Context): Boolean {
-        // 最可靠的信号：服务是否已被系统绑定/连接（无论通过开关还是"辅助功能快捷方式"启用）。
+        // 最可靠的信号：服务是否已被系统绑定/连接（无论通过开关、"辅助功能快捷方式"或辅助功能按钮启用）。
         if (ClickAccessibilityService.serviceReady.value) return true
 
-        // 退路：读取系统设置项并按长/短两种组件名格式匹配（避免格式不一致导致误判）。
+        // 退路：扫描多个相关系统设置项（普通开关 + 快捷方式 + 辅助功能按钮目标），
+        // 并按长/短两种组件名格式匹配（避免格式或键不一致导致误判）。
         val component = ComponentName(context, ClickAccessibilityService::class.java)
         val expectedFull = component.flattenToString()
         val expectedShort = component.flattenToShortString()
-        val enabled = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ) ?: return false
+        return ACCESSIBILITY_SETTINGS_KEYS.any { key ->
+            settingsListContains(context, key, expectedFull, expectedShort)
+        }
+    }
+
+    private fun settingsListContains(
+        context: Context,
+        key: String,
+        expectedFull: String,
+        expectedShort: String,
+    ): Boolean {
+        val value = Settings.Secure.getString(context.contentResolver, key) ?: return false
         val splitter = TextUtils.SimpleStringSplitter(':')
-        splitter.setString(enabled)
+        splitter.setString(value)
         while (splitter.hasNext()) {
             val entry = splitter.next()
             if (entry.equals(expectedFull, ignoreCase = true) ||
@@ -41,6 +50,13 @@ object PermissionChecker {
         }
         return false
     }
+
+    private val ACCESSIBILITY_SETTINGS_KEYS = listOf(
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        // 以下两项为隐藏常量，直接用字符串字面量：经"辅助功能快捷方式 / 辅助功能按钮"启用的服务记录于此
+        "accessibility_shortcut_target_service",
+        "accessibility_button_targets",
+    )
 
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
