@@ -43,8 +43,8 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 - [X] T006 实现 `ConfigRepository`（DataStore Preferences 读写 ClickConfig，FR-025）在 `data/ConfigRepository.kt`（依赖 T004）
 - [X] T007 [P] 实现 `PermissionChecker`（canDrawOverlays、无障碍是否启用、READ_PHONE_STATE、电池优化豁免；提供跳转 Intent）在 `permission/PermissionChecker.kt`
 - [X] T008 配置 `app/src/main/AndroidManifest.xml`：声明 `SYSTEM_ALERT_WINDOW`、`READ_PHONE_STATE` 权限与 AccessibilityService（`BIND_ACCESSIBILITY_SERVICE`）；新增 `app/src/main/res/xml/accessibility_service_config.xml`（`canPerformGestures=true`）
-- [X] T009 实现 `ClickAccessibilityService` 骨架 + WindowManager 悬浮窗宿主（`TYPE_APPLICATION_OVERLAY`，ComposeView 配 Lifecycle/SavedState/ViewModelStore owners）在 `service/ClickAccessibilityService.kt`（依赖 T008）
-- [X] T010 [P] 定义 `SessionState` 枚举与 `ClickSession` 运行态持有者（state/nextFireElapsed/clickCount）在 `scheduler/ClickSession.kt`（依据 data-model.md 状态机）
+- [X] T009 实现 `ClickAccessibilityService` 骨架 + WindowManager 悬浮窗宿主（`TYPE_ACCESSIBILITY_OVERLAY` 可信窗口；悬浮层为自绘 View）在 `service/ClickAccessibilityService.kt`（依赖 T008）
+- [X] T010 [P] 定义 `StopReason` 枚举（会话运行态以服务内 `isRunning` 状态流 + 计数表示，未单独建类）在 `scheduler/StopReason.kt`
 
 **Checkpoint**: 基础就绪——用户故事可开始
 
@@ -63,13 +63,13 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 ### Implementation for User Story 1
 
 - [X] T012 [P] [US1] 实现 `ClickScheduler`（注入时钟、start/onClickCompleted/delayUntilNext/remainingFraction，自重排）在 `scheduler/ClickScheduler.kt`（contracts/click-scheduler.md）
-- [X] T013 [US1] 在服务中实现手势派发：`dispatchGesture` 在 target 处 tap（duration=pressDurationMs），派发瞬间临时给控制按钮窗口加 `FLAG_NOT_TOUCHABLE` 后恢复（穿透自身，FR-012）于 `service/ClickAccessibilityService.kt`（依赖 T009）
+- [X] T013 [US1] 在服务中实现手势派发：`dispatchGesture` 在落点 tap（duration=pressDurationMs，**非零长度路径**），派发瞬间**移除准星窗 + 沉降**，并以 `getLocationOnScreen` 取真实落点（穿透自身，FR-012，见 research R12–R14）于 `service/ClickAccessibilityService.kt`（依赖 T009）
 - [X] T014 [US1] 在服务中实现调度循环与 `startClicking/stopClicking`：协程 loop（delay→派发→onClickCompleted），fireImmediately 处理，启动时准星重置为屏幕中心于 `service/ClickAccessibilityService.kt`（依赖 T012, T013）
-- [X] T015 [P] [US1] 实现准星 Composable（中心十字 + 圆形轮廓，所在窗口 `FLAG_NOT_TOUCHABLE`）在 `ui/overlay/Crosshair.kt`（参照 spec UI 原型）
-- [X] T016 [US1] 实现圆形"开始"按钮（半透明、覆盖十字、不超轮廓）、基础"停止"按钮与退出按钮 Composable 在 `ui/overlay/OverlayControls.kt`（依赖 T015）
-- [X] T017 [US1] 接线：悬浮层开始/停止/退出 → `startClicking`/`stopClicking(USER)`/`hideOverlayAndExit`（FR-008/010/011）在 `service/ClickAccessibilityService.kt` 与 `ui/overlay/`（依赖 T014, T016）
-- [X] T018 [US1] 实现最小配置界面（间隔输入 + 是否立即点击）并在 `MainActivity.kt` 承载、读写 `ConfigRepository` 在 `ui/config/ConfigScreen.kt`（依赖 T006）
-- [X] T019 [US1] 实现"运行中尝试改配置→弹窗确认是否停止"（是→stop 并可编辑，否→保持运行不改，FR-026）在 `ui/config/ConfigScreen.kt`（依赖 T017, T018）
+- [X] T015 [P] [US1] 实现准星自绘 View（中心十字 + 圆形轮廓 + 中心开始/停止按钮）在 `ui/overlay/CrosshairView.kt`（参照 spec UI 原型）
+- [X] T016 [US1] 实现中心开始/停止按钮（在准星中心，`CrosshairView`）与控制条的拖拽手柄/退出（自绘 View）在 `ui/overlay/ControlBarView.kt`（依赖 T015）
+- [X] T017 [US1] 接线：悬浮层开始/停止/退出 → `startClicking`/`stopClicking(USER)`/`hideOverlay`（FR-008/010/011）在 `service/ClickAccessibilityService.kt` 与 `ui/overlay/`（依赖 T014, T016）
+- [X] T018 [US1] 实现最小配置界面（间隔输入 + 是否立即点击）并在 `MainActivity.kt` 承载、读写 `ConfigRepository` 在 `MainActivity.kt`（依赖 T006）
+- [X] T019 [US1] 实现"运行中尝试改配置→弹窗确认是否停止"（是→stop 并可编辑，否→保持运行不改，FR-026）在 `MainActivity.kt`（依赖 T017, T018）
 
 **Checkpoint**: US1 可独立运行——MVP 达成
 
@@ -83,8 +83,8 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 
 ### Implementation for User Story 5
 
-- [X] T020 [US5] 实现首启权限门禁：检测悬浮窗+无障碍（PermissionChecker），缺失则展示引导并跳转系统设置、禁用"开始"入口直至授予（FR-022）在 `ui/onboarding/PermissionGateScreen.kt` 与 `MainActivity.kt`（依赖 T007）
-- [X] T021 [US5] 实现可选后台/省电豁免提示：检测未豁免时弹窗说明后果并提供跳转本应用系统设置入口，可忽略不阻断核心功能（FR-023）在 `ui/onboarding/BackgroundHintDialog.kt`（依赖 T007）
+- [X] T020 [US5] 实现首启权限门禁：检测悬浮窗+无障碍（PermissionChecker），缺失则展示引导并跳转系统设置、禁用"开始"入口直至授予（FR-022）在 `MainActivity.kt`（依赖 T007）
+- [X] T021 [US5] 实现可选后台/省电豁免提示：检测未豁免时弹窗说明后果并提供跳转本应用系统设置入口，可忽略不阻断核心功能（FR-023）在 `MainActivity.kt`（依赖 T007）
 
 **Checkpoint**: 首启引导完整；权限就绪即可使用 US1
 
@@ -98,13 +98,13 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 
 ### Tests for User Story 2
 
-- [X] T022 [P] [US2] 单元测试 `arrangeControls`：四边/四角输入下各控件包围盒落在屏幕可见区内（FR-014/SC-004）在 `app/src/test/java/com/gogoend/autotapper/OverlayLayoutTest.kt`
+- [X] T022 [P] [US2] 单元测试 `placeControlBar`：四边/四角输入下各控件包围盒落在屏幕可见区内（FR-014/SC-004）在 `app/src/test/java/com/gogoend/autotapper/OverlayLayoutTest.kt`
 
 ### Implementation for User Story 2
 
-- [X] T023 [P] [US2] 实现纯布局函数 `arrangeControls(center, screenSize, insets): ControlLayout`（边缘自适应）在 `ui/overlay/OverlayLayout.kt`（contracts/overlay-ui.md）
-- [X] T024 [US2] 实现拖拽手柄 Composable，拖动更新整个悬浮层位置并实时 `updateTarget(x,y)`（FR-006）在 `ui/overlay/DragHandle.kt` 与 `service/ClickAccessibilityService.kt`（依赖 T009, T017）
-- [X] T025 [US2] 在悬浮层布局中应用 `arrangeControls`（拖到边缘重排控件）在 `ui/overlay/OverlayControls.kt`（依赖 T023, T024）
+- [X] T023 [P] [US2] 实现纯布局函数 `placeControlBar(center, screenSize, insets): ControlLayout`（边缘自适应）在 `ui/overlay/OverlayLayout.kt`（contracts/overlay-ui.md）
+- [X] T024 [US2] 实现拖拽手柄（自绘控制条 View），拖动同时移动准星窗与控制条窗并更新落点（FR-006）在 `ui/overlay/ControlBarView.kt` 与 `service/ClickAccessibilityService.kt`（依赖 T009, T017）
+- [X] T025 [US2] 在悬浮层布局中应用 `placeControlBar`（拖到边缘重排控件）在 `ui/overlay/ControlBarView.kt`（依赖 T023, T024）
 
 **Checkpoint**: US1 + US2 各自可独立工作
 
@@ -121,7 +121,7 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 - [X] T026 [P] [US4] 注册 `BroadcastReceiver(ACTION_SCREEN_OFF)` → `stopClicking(SCREEN_OFF)`，解锁不自动恢复（FR-020/FR-028）在 `service/ClickAccessibilityService.kt`
 - [X] T027 [US4] 实现来电检测：API31+ `TelephonyCallback`、API26–30 `PhoneStateListener`；state≠IDLE 时按 onIncomingCall STOP→停止并取消临近待派发点击 / CONTINUE→保持（FR-018/019）在 `service/ClickAccessibilityService.kt`（依赖 T014）
 - [X] T028 [US4] 处理 `onConfigurationChanged`（旋转/尺寸变化）→ `stopClicking(CONFIG_CHANGE)` 并提示用户重新确认准星位置（FR-027）在 `service/ClickAccessibilityService.kt`（依赖 T014）
-- [X] T029 [US4] 配置界面新增"来电动作"（STOP/CONTINUE）并在需要时发起 `READ_PHONE_STATE` 运行时授权请求、缺失时提示后果（R5）在 `ui/config/ConfigScreen.kt`（依赖 T018）
+- [X] T029 [US4] 配置界面新增"来电动作"（STOP/CONTINUE）并在需要时发起 `READ_PHONE_STATE` 运行时授权请求、缺失时提示后果（R5）在 `MainActivity.kt`（依赖 T018）
 
 **Checkpoint**: 中断处理稳健，长时间运行可靠
 
@@ -140,8 +140,8 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 ### Implementation for User Story 3
 
 - [X] T031 [P] [US3] 实现 `CountdownModel.remainingFraction(nextFireElapsed, intervalMs)` 在 `scheduler/CountdownModel.kt`
-- [X] T032 [US3] 将"停止"按钮升级为扇形渲染（Compose `Canvas.drawArc`，`withFrameNanos` 帧驱动，半径不超轮廓、半透明覆盖十字，FR-009）在 `ui/overlay/OverlayControls.kt`（依赖 T031, T016）
-- [X] T033 [US3] 配置界面新增"按下时长"并在 UI 强制最小间隔（间隔 ≥ minIntervalMs，FR-024）在 `ui/config/ConfigScreen.kt`（依赖 T018）
+- [X] T032 [US3] 将"停止"按钮升级为扇形渲染（自绘 View `Canvas.drawArc`，帧驱动，半径不超轮廓、半透明覆盖十字，FR-009）在 `ui/overlay/CrosshairView.kt`（依赖 T031, T016）
+- [X] T033 [US3] 配置界面新增"按下时长"并在 UI 强制最小间隔（间隔 ≥ minIntervalMs，FR-024）在 `MainActivity.kt`（依赖 T018）
 
 **Checkpoint**: 全部用户故事独立可用
 
@@ -152,7 +152,7 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 **Purpose**: 跨故事完善
 
 - [X] T034 [P] 填写无障碍服务用途说明字符串、应用图标与文案于 `app/src/main/res/values/strings.xml` 及相关资源
-- [X] T035 [P] 补充边缘 insets 单测（状态栏/导航栏/刘海区域下 `arrangeControls` 行为）在 `app/src/test/java/com/gogoend/autotapper/OverlayLayoutTest.kt`
+- [X] T035 [P] 补充边缘 insets 单测（状态栏/导航栏/刘海区域下 `placeControlBar` 行为）在 `app/src/test/java/com/gogoend/autotapper/OverlayLayoutTest.kt`
 - [~] T036 间隔精度验证（SC-001）。**逻辑层已覆盖**：`ClickSchedulerTest.steadyStateIntervalWithinFivePercent` 模拟调度循环验证稳态间隔 ±5% 且无漂移。**待办（真机）**：设 5s 跑 10 分钟，用诊断日志比对相邻 CLICK 时间戳。
 - [X] T037 代码清理与重构（统一 service 与 UI 的状态流、移除样板）跨 `service/`、`ui/`
 - [~] T038 手动验收。**已就绪**：quickstart.md「验收对照（T038）」清单已按当前实现刷新，可逐项勾选。**待办（真机）**：实际跑一遍并勾选。
@@ -212,10 +212,10 @@ description: "Task list for 自动连点器 (Auto Tapper) implementation"
 ## Parallel Example: User Story 1
 
 ```bash
-# 纯逻辑与其单测、独立 Composable 并行：
+# 纯逻辑与其单测、独立视图 并行：
 Task: "T011 单元测试 ClickScheduler in app/src/test/.../ClickSchedulerTest.kt"
 Task: "T012 实现 ClickScheduler in scheduler/ClickScheduler.kt"
-Task: "T015 实现准星 Composable in ui/overlay/Crosshair.kt"
+Task: "T015 实现准星自绘 View in ui/overlay/CrosshairView.kt"
 # 注意：T013/T014/T017 同改 ClickAccessibilityService.kt，需串行
 ```
 
