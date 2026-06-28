@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Interval Clicker</string>
+    <string name="app_name">Auto Tapper</string>
+    <string name="accessibility_service_description">用于在你选定的屏幕位置执行自动点击（如相机快门）。仅在你开启定时点击时派发点击动作，不读取或收集屏幕内容。</string>
 </resources>
