@@ -1,8 +1,8 @@
 # Contract: ClickAccessibilityService
 
-核心长生命周期组件。承载悬浮窗（两窗口）、手势派发、调度循环与（规划中的）中断监听。
+核心长生命周期组件。承载悬浮窗（两窗口）、手势派发、调度循环与中断监听。
 
-> 注：本契约已按实际实现修订（见 research R12–R16）。带"（规划）"标记者为 US4，尚未实现。
+> 注：本契约已按实际实现修订（见 research R12–R16）。US4 中断监听已实现。
 
 ## 声明（AndroidManifest + res/xml）
 
@@ -42,7 +42,7 @@ enum class StopReason { USER, SCREEN_OFF, INCOMING_CALL, CONFIG_CHANGE, EXIT }
 - 基于 `SystemClock.elapsedRealtime`，过期不补发（无堆积）。
 - `stopClicking` 取消协程。
 
-## 中断监听契约（US4，规划中，尚未实现）
+## 中断监听契约（US4，已实现）
 
 | 信号 | 监听方式 | 动作 |
 |------|----------|------|

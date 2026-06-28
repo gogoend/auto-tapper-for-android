@@ -24,7 +24,7 @@
 
 **Performance Goals**: 间隔精度 ±5%（SC-001）；倒计时动画与界面流畅、无延迟累积导致的批量齐发（SC-002/FR-013）；点击触达成功率 ≥99%（SC-006）
 
-**Constraints**: 注入点击必须真正作用于下方目标——在 Android 16+ 需"派发瞬间移除悬浮窗 + 非零长度路径"（FR-012，见 research R12/R13）；运行期间不可改配置（FR-026）；锁屏/旋转/来电按规则停止（FR-018/020/027/028，**US4 尚未实现**）；后台存活为 best-effort（FR-021）
+**Constraints**: 注入点击必须真正作用于下方目标——在 Android 16+ 需"派发瞬间移除悬浮窗 + 非零长度路径"（FR-012，见 research R12/R13）；运行期间不可改配置（FR-026）；锁屏/旋转/来电按规则停止（FR-018/020/027/028，已实现）；后台存活为 best-effort（FR-021）
 
 **权限说明（修订）**: 因悬浮层使用 `TYPE_ACCESSIBILITY_OVERLAY`，**不需要 `SYSTEM_ALERT_WINDOW`**；核心可用性仅取决于无障碍服务是否真正连接（`serviceReady`，见 research R16）。
 
@@ -103,7 +103,7 @@ app/src/test/java/com/gogoend/intervalclicker/      # JUnit4：ClickScheduler、
 > 3. 点击派发：派发瞬间移除准星窗 + 沉降 + 非零长度路径 + 用 `getLocationOnScreen` 取真实落点；
 > 4. 退出按钮 = 隐藏悬浮窗（不 `disableSelf`）；配置页有显示/隐藏切换、独立"诊断与日志"页；
 > 5. 无障碍授权判定以 `serviceReady`（服务实际连接）为准；
-> 6. **US4（来电/锁屏/旋转中断）尚未实现**；compileSdk 提升至 37。
+> 6. compileSdk 提升至 37。US4（来电/锁屏/旋转中断）已实现：屏幕息屏停止、来电按配置停止/继续（`TelephonyCallback`/`PhoneStateListener` + `READ_PHONE_STATE`）、旋转停止并提示+夹回悬浮窗。
 
 ## Complexity Tracking
 

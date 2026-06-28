@@ -2,12 +2,25 @@ package com.gogoend.intervalclicker.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.os.Build
 import android.os.SystemClock
+import android.telephony.PhoneStateListener
+import android.telephony.TelephonyCallback
+import android.telephony.TelephonyManager
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import com.gogoend.intervalclicker.data.CallAction
 import com.gogoend.intervalclicker.data.ClickConfig
 import com.gogoend.intervalclicker.data.ClickTarget
 import com.gogoend.intervalclicker.logging.ClickLogger
@@ -66,6 +79,13 @@ class ClickAccessibilityService :
     private var clickCount = 0
     private var logger: ClickLogger? = null
 
+    // US4 中断监听
+    private var screenOffReceiver: BroadcastReceiver? = null
+    private var telephonyCallback: TelephonyCallback? = null
+    private var phoneStateListener: PhoneStateListener? = null
+    private var callMonitoringActive = false
+    private var lastOrientation = Configuration.ORIENTATION_UNDEFINED
+
     private val baseFlags =
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -75,6 +95,9 @@ class ClickAccessibilityService :
         super.onServiceConnected()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         logger = ClickLogger(applicationContext)
+        lastOrientation = resources.configuration.orientation
+        registerScreenOffReceiver()
+        ensureCallMonitoring()
         instance = this
         serviceReady.value = true
     }
@@ -82,6 +105,29 @@ class ClickAccessibilityService :
     override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* 不需要监听事件 */ }
 
     override fun onInterrupt() { /* no-op */ }
+
+    // 屏幕旋转 / 尺寸变化（FR-027）：运行中则停止并提示，同时把悬浮窗夹回新屏幕范围内
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val orientationChanged = newConfig.orientation != lastOrientation
+        lastOrientation = newConfig.orientation
+        if (!orientationChanged) return
+
+        if (isRunning.value) {
+            stopClicking(StopReason.CONFIG_CHANGE)
+            Toast.makeText(this, "屏幕方向变化，已停止定时，请重新确认点击位置", Toast.LENGTH_LONG).show()
+        }
+        // 屏幕尺寸已变，重新读取并把准星/控制条夹回可见范围
+        val m = resources.displayMetrics
+        screenW = m.widthPixels
+        screenH = m.heightPixels
+        target = ClickTarget(
+            target.x.coerceIn(0f, screenW.toFloat()),
+            target.y.coerceIn(0f, screenH.toFloat()),
+        )
+        positionCrosshair()
+        positionControl()
+    }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
         teardown()
@@ -96,9 +142,84 @@ class ClickAccessibilityService :
     private fun teardown() {
         stopClicking(StopReason.EXIT)
         removeOverlay()
+        unregisterScreenOffReceiver()
+        stopCallMonitoring()
         overlayShown.value = false
         serviceReady.value = false
         if (instance === this) instance = null
+    }
+
+    // ---- US4：中断监听（锁屏 / 来电 / 旋转）----
+
+    private fun registerScreenOffReceiver() {
+        if (screenOffReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                    stopClicking(StopReason.SCREEN_OFF) // 锁屏/息屏停止，不自动恢复（FR-020/FR-028）
+                }
+            }
+        }
+        ContextCompat.registerReceiver(
+            this,
+            receiver,
+            IntentFilter(Intent.ACTION_SCREEN_OFF),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        screenOffReceiver = receiver
+    }
+
+    private fun unregisterScreenOffReceiver() {
+        screenOffReceiver?.let { runCatching { unregisterReceiver(it) } }
+        screenOffReceiver = null
+    }
+
+    /** 在已授予 READ_PHONE_STATE 时注册来电监听；可重复调用（幂等）。 */
+    fun ensureCallMonitoring() {
+        if (callMonitoringActive) return
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_PHONE_STATE)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val tm = getSystemService(TELEPHONY_SERVICE) as? TelephonyManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val cb = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
+                override fun onCallStateChanged(state: Int) = handleCallState(state)
+            }
+            runCatching { tm.registerTelephonyCallback(ContextCompat.getMainExecutor(this), cb) }
+                .onSuccess { telephonyCallback = cb; callMonitoringActive = true }
+        } else {
+            @Suppress("DEPRECATION")
+            val listener = object : PhoneStateListener() {
+                override fun onCallStateChanged(state: Int, phoneNumber: String?) = handleCallState(state)
+            }
+            @Suppress("DEPRECATION")
+            runCatching { tm.listen(listener, PhoneStateListener.LISTEN_CALL_STATE) }
+                .onSuccess { phoneStateListener = listener; callMonitoringActive = true }
+        }
+    }
+
+    private fun stopCallMonitoring() {
+        val tm = getSystemService(TELEPHONY_SERVICE) as? TelephonyManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            telephonyCallback?.let { cb -> runCatching { tm?.unregisterTelephonyCallback(cb) } }
+        } else {
+            @Suppress("DEPRECATION")
+            phoneStateListener?.let { l -> runCatching { tm?.listen(l, PhoneStateListener.LISTEN_NONE) } }
+        }
+        telephonyCallback = null
+        phoneStateListener = null
+        callMonitoringActive = false
+    }
+
+    private fun handleCallState(state: Int) {
+        if (state == TelephonyManager.CALL_STATE_IDLE) return // 通话结束不自动恢复（FR-028）
+        // 来电响铃或通话中：按配置处理（FR-018/019）
+        if (isRunning.value && currentConfig.onIncomingCall == CallAction.STOP) {
+            logger?.logEvent("INCOMING_CALL state=$state -> STOP")
+            stopClicking(StopReason.INCOMING_CALL) // 取消协程即取消临近待派发点击（FR-018）
+        }
     }
 
     // ---- 对外能力 ----
@@ -189,6 +310,7 @@ class ClickAccessibilityService :
     fun startClicking() {
         val cs = crosshairView ?: return
         if (isRunning.value) return
+        ensureCallMonitoring() // 若权限在连接后才授予，这里补注册
         isRunning.value = true
         cs.setRunning(true)
         clickCount = 0

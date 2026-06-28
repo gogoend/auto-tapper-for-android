@@ -1,11 +1,14 @@
 package com.gogoend.intervalclicker
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,6 +46,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
@@ -107,6 +112,19 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
     val serviceReady by ClickAccessibilityService.serviceReady.collectAsState()
     var showDiagnostics by remember { mutableStateOf(false) }
 
+    var phoneStateGranted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val phonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        phoneStateGranted = granted
+        if (granted) ClickAccessibilityService.instance?.ensureCallMonitoring()
+    }
+
     Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
         Column(
             modifier = Modifier
@@ -143,6 +161,10 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
                     isRunning = isRunning,
                     overlayShown = overlayShown,
                     batteryOk = perms.battery,
+                    phoneStateGranted = phoneStateGranted,
+                    onRequestPhonePermission = {
+                        phonePermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE)
+                    },
                     onConfigChange = { updated ->
                         scope.launch { repo.save(updated) }
                         ClickAccessibilityService.instance?.updateConfig(updated)
@@ -192,6 +214,8 @@ private fun ConfigContent(
     isRunning: Boolean,
     overlayShown: Boolean,
     batteryOk: Boolean,
+    phoneStateGranted: Boolean,
+    onRequestPhonePermission: () -> Unit,
     onConfigChange: (ClickConfig) -> Unit,
     onToggleOverlay: () -> Unit,
     onStopForEdit: () -> Unit,
@@ -255,8 +279,19 @@ private fun ConfigContent(
             onClick = {
                 val next = if (config.onIncomingCall == CallAction.STOP) CallAction.CONTINUE else CallAction.STOP
                 onConfigChange(config.copy(onIncomingCall = next))
+                if (next == CallAction.STOP && !phoneStateGranted) onRequestPhonePermission()
             },
         ) { Text("切换") }
+    }
+    if (config.onIncomingCall == CallAction.STOP && !phoneStateGranted) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "需要电话状态权限才能在来电时停止；未授予则来电不会自动停止。",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(enabled = editable, onClick = onRequestPhonePermission) { Text("授权") }
+        }
     }
 
     Spacer(Modifier.height(8.dp))

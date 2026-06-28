@@ -118,10 +118,10 @@ description: "Task list for 自动连点器 (Interval Auto-Clicker) implementati
 
 ### Implementation for User Story 4
 
-- [ ] T026 [P] [US4] 注册 `BroadcastReceiver(ACTION_SCREEN_OFF)` → `stopClicking(SCREEN_OFF)`，解锁不自动恢复（FR-020/FR-028）在 `service/ClickAccessibilityService.kt`
-- [ ] T027 [US4] 实现来电检测：API31+ `TelephonyCallback`、API26–30 `PhoneStateListener`；state≠IDLE 时按 onIncomingCall STOP→停止并取消临近待派发点击 / CONTINUE→保持（FR-018/019）在 `service/ClickAccessibilityService.kt`（依赖 T014）
-- [ ] T028 [US4] 处理 `onConfigurationChanged`（旋转/尺寸变化）→ `stopClicking(CONFIG_CHANGE)` 并提示用户重新确认准星位置（FR-027）在 `service/ClickAccessibilityService.kt`（依赖 T014）
-- [ ] T029 [US4] 配置界面新增"来电动作"（STOP/CONTINUE）并在需要时发起 `READ_PHONE_STATE` 运行时授权请求、缺失时提示后果（R5）在 `ui/config/ConfigScreen.kt`（依赖 T018）
+- [X] T026 [P] [US4] 注册 `BroadcastReceiver(ACTION_SCREEN_OFF)` → `stopClicking(SCREEN_OFF)`，解锁不自动恢复（FR-020/FR-028）在 `service/ClickAccessibilityService.kt`
+- [X] T027 [US4] 实现来电检测：API31+ `TelephonyCallback`、API26–30 `PhoneStateListener`；state≠IDLE 时按 onIncomingCall STOP→停止并取消临近待派发点击 / CONTINUE→保持（FR-018/019）在 `service/ClickAccessibilityService.kt`（依赖 T014）
+- [X] T028 [US4] 处理 `onConfigurationChanged`（旋转/尺寸变化）→ `stopClicking(CONFIG_CHANGE)` 并提示用户重新确认准星位置（FR-027）在 `service/ClickAccessibilityService.kt`（依赖 T014）
+- [X] T029 [US4] 配置界面新增"来电动作"（STOP/CONTINUE）并在需要时发起 `READ_PHONE_STATE` 运行时授权请求、缺失时提示后果（R5）在 `ui/config/ConfigScreen.kt`（依赖 T018）
 
 **Checkpoint**: 中断处理稳健，长时间运行可靠
 
