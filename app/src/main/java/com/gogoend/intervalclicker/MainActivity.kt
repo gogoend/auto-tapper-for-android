@@ -419,14 +419,25 @@ private fun AboutContent(onBack: () -> Unit) {
         }
     }
 
+    // 组 1：项目
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("链接与联系", style = MaterialTheme.typography.titleMedium)
-            AboutRow("作者 GitHub", "github.com/gogoend", "打开") {
-                openUrl(context, "https://github.com/gogoend")
-            }
+            Text("项目", style = MaterialTheme.typography.titleMedium)
             AboutRow("项目地址", "gogoend/auto-tapper-for-android", "打开") {
                 openUrl(context, "https://github.com/gogoend/auto-tapper-for-android")
+            }
+            AboutRow("反馈问题", "提交 Issue", "打开") {
+                openUrl(context, "https://github.com/gogoend/auto-tapper-for-android/issues")
+            }
+        }
+    }
+
+    // 组 2：与作者联系
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("与作者联系", style = MaterialTheme.typography.titleMedium)
+            AboutRow("GitHub", "github.com/gogoend", "打开") {
+                openUrl(context, "https://github.com/gogoend")
             }
             AboutRow("微信", "gogoend", "复制") { copyToClipboard(context, "微信号", "gogoend") }
             AboutRow("小红书", "gogoend", "复制") { copyToClipboard(context, "小红书", "gogoend") }
@@ -434,13 +445,14 @@ private fun AboutContent(onBack: () -> Unit) {
         }
     }
 
+    // 组 3：请作者喝咖啡
     Card(Modifier.fillMaxWidth()) {
         Column(
             Modifier.padding(16.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("请作者喝杯咖啡（支付宝）", style = MaterialTheme.typography.titleMedium)
+            Text("请作者喝咖啡", style = MaterialTheme.typography.titleMedium)
             val qrId = remember {
                 context.resources.getIdentifier("alipay_qr", "drawable", context.packageName)
             }
@@ -450,6 +462,7 @@ private fun AboutContent(onBack: () -> Unit) {
                     contentDescription = "支付宝收款码",
                     modifier = Modifier.size(240.dp),
                 )
+                Text("支付宝扫一扫", style = MaterialTheme.typography.bodySmall)
             } else {
                 Text(
                     "（收款码图片缺失：请将支付宝收款码放入 app/src/main/res/drawable/alipay_qr.png）",
