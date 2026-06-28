@@ -34,11 +34,13 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-项目宪法 `.specify/memory/constitution.md` 当前仍为未填充模板（占位符，未批准），**未定义任何具体原则或门禁**。因此本次规划没有可校验的硬性门禁。
+项目宪法 `.specify/memory/constitution.md` 已批准为 **v1.0.0**，定义五条原则：
+I 可测的纯逻辑核心、II 隐私与最小权限、III 规格驱动与文档同步、IV 平台兼容与真机验证、
+V 可靠的调度与后台行为。
 
-- **初次评估（Phase 0 前）**: PASS（无定义门禁）。采用通用工程实践：核心逻辑（调度、倒计时、校验）与 Android 框架解耦以便单元测试；权限/隐私遵循最小化（仅悬浮窗、无障碍、READ_PHONE_STATE 用于来电检测，本地存储、无网络）。
-- **再次评估（Phase 1 后）**: PASS（设计未引入需要论证的复杂度违规）。
-- **建议**: 后续运行 `/speckit-constitution` 正式确立项目原则后再回看本节。
+- **初次评估（Phase 0 前）**: PASS。设计将核心逻辑（调度/倒计时/校验/布局）与 Android 框架解耦以便单测（原则 I）；本地运行、最小权限（原则 II）。
+- **再次评估（Phase 1 / 实现后）**: PASS。实现符合全部五条：纯逻辑单测 12 项（I）；无网络/无账户/仅必需授权（II）；spec/plan/tasks/research 同步且 `/speckit-analyze` 无 HIGH+（III）；Android 16+ 坑记于 research R12–R16 且真机验证（IV）；无堆积调度 + 中断不自动恢复 + best-effort 存活（V）。
+- **复杂度违规**: 无（见 Complexity Tracking 为空）。
 
 ## Project Structure
 
