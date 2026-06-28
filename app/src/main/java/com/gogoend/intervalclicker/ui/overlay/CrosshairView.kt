@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -32,18 +33,30 @@ class CrosshairView(
     private var running = false
     private var fraction = 1f
 
+    private val density = resources.displayMetrics.density
+    private fun dp(v: Float) = v * density
+
     private val c get() = sizePx / 2f
     private val circleR = sizePx * 0.40f
-    private val buttonR = circleR * 0.62f
+    // 开始/停止按钮：在原比例基础上直径 +20dp，且半径不超出圆形轮廓
+    private val buttonR = (circleR * 0.62f + dp(10f)).coerceAtMost(circleR)
+    private val crossHalf = dp(4f) // 十字总长 8dp
 
-    private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    // 外圈：黑白相间实线（白底实线 + 黑色虚线叠加），保证深浅背景下都可见
+    private val outlineWhitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = sizePx * 0.02f
-        color = Color.argb(235, 255, 255, 255)
+        strokeWidth = dp(3f)
+        color = Color.WHITE
+    }
+    private val outlineBlackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(3f)
+        color = Color.BLACK
+        pathEffect = DashPathEffect(floatArrayOf(dp(8f), dp(8f)), 0f)
     }
     private val crossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = sizePx * 0.02f
+        strokeWidth = dp(2f)
         color = Color.argb(235, 0, 0, 0)
     }
     private val startPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -73,10 +86,12 @@ class CrosshairView(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // 圆形轮廓 + 中心十字
-        canvas.drawCircle(c, c, circleR, outlinePaint)
-        canvas.drawLine(c - circleR, c, c + circleR, c, crossPaint)
-        canvas.drawLine(c, c - circleR, c, c + circleR, crossPaint)
+        // 圆形轮廓（黑白相间）
+        canvas.drawCircle(c, c, circleR, outlineWhitePaint)
+        canvas.drawCircle(c, c, circleR, outlineBlackPaint)
+        // 中心十字（短）—— 半透明按钮覆盖其上
+        canvas.drawLine(c - crossHalf, c, c + crossHalf, c, crossPaint)
+        canvas.drawLine(c, c - crossHalf, c, c + crossHalf, crossPaint)
 
         // 中心按钮：开始=圆形；停止=扇形倒计时（均覆盖十字、半径不超轮廓）
         if (running) {
