@@ -213,6 +213,9 @@ private fun AppRoot(repo: ConfigRepository, perms: PermSnapshot) {
                     onOpenBattery = {
                         context.startActivity(PermissionChecker.batteryOptimizationSettingsIntent())
                     },
+                    onOpenBackground = {
+                        context.startActivity(PermissionChecker.appDetailsSettingsIntent(context))
+                    },
                     onOpenDiagnostics = { showDiagnostics = true },
                     onOpenAbout = { showAbout = true },
                 )
@@ -250,6 +253,7 @@ private fun ConfigContent(
     onToggleOverlay: () -> Unit,
     onStopForEdit: () -> Unit,
     onOpenBattery: () -> Unit,
+    onOpenBackground: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
@@ -346,13 +350,21 @@ private fun ConfigContent(
         Text("关于")
     }
 
+    // 后台存活相关（可选）：拆为两个独立入口
     if (!batteryOk) {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("建议（可选）：允许后台运行 / 关闭省电限制", style = MaterialTheme.typography.titleSmall)
-                Text("不设置不影响基本使用，但长时间锁屏/后台运行时可能被系统中断。", style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = onOpenBattery) { Text("去设置（可选）") }
+                Text("关闭省电限制（电池优化）", style = MaterialTheme.typography.titleSmall)
+                Text("可选。将本应用加入电池优化白名单，降低长时间运行被系统回收的概率。", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = onOpenBattery) { Text("去设置") }
             }
+        }
+    }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("允许后台运行 / 自启动", style = MaterialTheme.typography.titleSmall)
+            Text("可选，且为厂商私有设置（无法自动检测）。在应用详情/电池里把本应用设为「无限制 / 允许后台 / 自启动」，可提升长时间存活率。", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = onOpenBackground) { Text("打开应用设置") }
         }
     }
 

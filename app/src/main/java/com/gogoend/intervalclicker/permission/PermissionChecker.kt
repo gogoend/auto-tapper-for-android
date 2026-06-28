@@ -3,6 +3,7 @@ package com.gogoend.intervalclicker.permission
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.TextUtils
@@ -74,4 +75,10 @@ object PermissionChecker {
     fun batteryOptimizationSettingsIntent(): Intent =
         Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /** 应用详情页——用于引导用户开启"允许后台运行/自启动"等厂商私有开关（无标准入口）。 */
+    fun appDetailsSettingsIntent(context: Context): Intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.parse("package:${context.packageName}"),
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 }
